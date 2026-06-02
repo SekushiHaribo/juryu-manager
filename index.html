@@ -220,7 +220,7 @@
       flex: 1;
       min-width: 0;
     }
-    .fridge-edit-btn {
+    .fridge-edit-btn, .fridge-copy-btn {
       flex-shrink: 0;
       width: 26px; height: 26px;  /* match delete button */
       border: none;
@@ -233,7 +233,7 @@
       -webkit-tap-highlight-color: transparent;
       transition: background .15s;
     }
-    .fridge-edit-btn:active { background: rgba(255,255,255,.4); }
+    .fridge-edit-btn:active, .fridge-copy-btn:active { background: rgba(255,255,255,.4); }
 
     /* inline rename input */
     .fname-edit {
@@ -1248,7 +1248,9 @@ function renderGrid() {
     }
 
     const editControls = editMode ? `<button class="fridge-del-btn" title="삭제">✕</button>` : '';
-    const editBtnHtml = editMode ? `<button class="fridge-edit-btn" title="이름 수정">✎</button>` : '';
+    const editBtnHtml = editMode
+      ? `<button class="fridge-edit-btn" title="이름 수정">✎</button><button class="fridge-copy-btn" title="복사">⧉</button>`
+      : '';
 
     card.innerHTML = `
       <div class="fridge-card-header">${editControls}
@@ -1267,13 +1269,16 @@ function renderGrid() {
     if (editMode) {
       const delBtn = card.querySelector('.fridge-del-btn');
       const editBtn = card.querySelector('.fridge-edit-btn');
+      const copyBtn = card.querySelector('.fridge-copy-btn');
       // stop these buttons from triggering the card's tap-to-open or long-press drag
       ['mousedown','touchstart'].forEach(ev => {
         delBtn.addEventListener(ev, e => e.stopPropagation());
         editBtn.addEventListener(ev, e => e.stopPropagation());
+        copyBtn.addEventListener(ev, e => e.stopPropagation());
       });
       delBtn.addEventListener('click', e => { e.stopPropagation(); deleteFridge(f.id); });
       editBtn.addEventListener('click', e => { e.stopPropagation(); startRename(card, f.id); });
+      copyBtn.addEventListener('click', e => { e.stopPropagation(); copyFridge(f.id); });
     }
 
     // long-press → drag
@@ -2393,6 +2398,24 @@ function deleteFridge(id) {
   renderSettingsDrawer();
   renderGrid();
   renderSummary();
+}
+
+// duplicate a fridge (its bay/slot layout) right next to the original
+function copyFridge(id) {
+  const idx = state.fridges.findIndex(f => f.id === id);
+  if (idx < 0) return;
+  const src = state.fridges[idx];
+  ensureBays(src);
+  const copy = {
+    id: uid(),
+    name: src.name + ' (복사)',
+    bays: JSON.parse(JSON.stringify(src.bays))   // deep-copy the slot layout
+  };
+  state.fridges.splice(idx + 1, 0, copy);          // insert right after the original
+  save();
+  renderGrid();
+  renderSettingsDrawer();
+  showToast(`"${src.name}" 복사됨`);
 }
 
 function deleteDrink(id) {
