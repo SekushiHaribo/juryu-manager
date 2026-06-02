@@ -1,6 +1,6 @@
 // Simple offline-first service worker for the 주류 관리 PWA.
 // Bump CACHE when you change index.html so clients pick up the new version.
-const CACHE = 'juryu-v8';
+const CACHE = 'juryu-v9';
 const ASSETS = [
   './',
   './index.html',
