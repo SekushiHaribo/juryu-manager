@@ -4,8 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="주류 매니저" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <title>냉장고 판매 관리</title>
+  <meta name="theme-color" content="#2563eb" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icon-180.png" />
+  <title>주류 매니저</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -45,6 +51,24 @@
       box-shadow: 0 2px 8px rgba(0,0,0,.2);
     }
     header h1 { font-size: 17px; font-weight: 700; }
+    .title-row { display: flex; align-items: center; gap: 8px; }
+    .install-btn {
+      display: none;
+      align-items: center;
+      gap: 3px;
+      background: rgba(255,255,255,.2);
+      border: none;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      white-space: nowrap;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .install-btn.show { display: inline-flex; }
+    .install-btn:active { background: rgba(255,255,255,.35); }
     header .date { font-size: 12px; opacity: .8; margin-top: 1px; }
     .header-left { display: flex; flex-direction: column; }
     .settings-btn {
@@ -984,7 +1008,10 @@
 
 <header>
   <div class="header-left">
-    <h1>🧊 냉장고 판매 관리</h1>
+    <div class="title-row">
+      <h1>🧊 주류 매니저</h1>
+      <button id="installBtn" class="install-btn" onclick="onInstallClick()" title="앱 설치">⬇ 설치</button>
+    </div>
     <span class="date" id="headerDate"></span>
   </div>
   <button class="settings-btn" onclick="openSettings()" title="설정">⚙️</button>
@@ -1883,17 +1910,22 @@ function openDetail(fid, cardEl) {
   // expanded target: near-fullscreen, centered, capped at 640px wide.
   // Set synchronously so the final state is always correct (the CSS transition
   // animates between start and target on devices that render frames).
-  const margin = 14;
-  const maxW = 640;
-  const w = Math.min(window.innerWidth - margin * 2, maxW);
+  // leave a tappable gap around the card (more at top/bottom) so the user can
+  // tap outside to close
+  // leave a generous tappable gap around the card (proportional to screen) so
+  // tapping outside closes it easily
+  const marginX = Math.max(28, Math.round(window.innerWidth * 0.10));
+  const marginY = Math.max(90, Math.round(window.innerHeight * 0.16));
+  const maxW = 520;
+  const w = Math.min(window.innerWidth - marginX * 2, maxW);
   const left = (window.innerWidth - w) / 2;
 
   expand.style.transition = '';
   overlay.classList.add('open');
-  expand.style.top = margin + 'px';
+  expand.style.top = marginY + 'px';
   expand.style.left = left + 'px';
   expand.style.width = w + 'px';
-  expand.style.height = (window.innerHeight - margin * 2) + 'px';
+  expand.style.height = (window.innerHeight - marginY * 2) + 'px';
   expand.style.borderRadius = '16px';
 }
 
@@ -2401,6 +2433,52 @@ document.getElementById('newFridgeName').addEventListener('keydown', e => { if (
 // INIT
 // ════════════════════════════════════════
 renderGrid();
+
+// register service worker for offline use / installability (PWA)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+
+// ── In-app install button (header) ──
+let deferredPrompt = null;
+function installBtnEl() { return document.getElementById('installBtn'); }
+function isStandalone() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+function isIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent); }
+
+// Chrome / Edge / Android: fires when the app meets install criteria
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  if (!isStandalone()) installBtnEl()?.classList.add('show');
+});
+
+window.addEventListener('appinstalled', () => {
+  deferredPrompt = null;
+  installBtnEl()?.classList.remove('show');
+});
+
+function onInstallClick() {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.finally(() => {
+      deferredPrompt = null;
+      installBtnEl()?.classList.remove('show');
+    });
+  } else if (isIOS()) {
+    alert('아이폰 설치 방법\n\n1) Safari 하단의 공유 버튼(↑ 네모)을 누르세요\n2) 메뉴에서 "홈 화면에 추가"를 선택하세요\n3) "추가"를 누르면 완료!');
+  } else {
+    alert('브라우저 메뉴(⋮)에서 "앱 설치" 또는 "홈 화면에 추가"를 선택하세요.');
+  }
+}
+
+// Always show the install button when running in a browser tab (not yet installed).
+// If the browser fired beforeinstallprompt we use the native prompt; otherwise the
+// button shows a platform-specific manual guide.
+if (!isStandalone()) installBtnEl()?.classList.add('show');
 </script>
 </body>
 </html>

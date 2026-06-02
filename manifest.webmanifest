@@ -1,6 +1,6 @@
 {
-  "name": "주류 관리",
-  "short_name": "주류관리",
+  "name": "주류 매니저",
+  "short_name": "주류매니저",
   "description": "요식업장 냉장고 주류·음료 채울 개수 관리",
   "lang": "ko",
   "start_url": "./index.html",
