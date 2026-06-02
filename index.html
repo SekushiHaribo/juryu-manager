@@ -1910,17 +1910,20 @@ function openDetail(fid, cardEl) {
   // expanded target: near-fullscreen, centered, capped at 640px wide.
   // Set synchronously so the final state is always correct (the CSS transition
   // animates between start and target on devices that render frames).
-  const margin = 14;
-  const maxW = 640;
-  const w = Math.min(window.innerWidth - margin * 2, maxW);
+  // leave a tappable gap around the card (more at top/bottom) so the user can
+  // tap outside to close
+  const marginX = 18;
+  const marginY = 64;
+  const maxW = 600;
+  const w = Math.min(window.innerWidth - marginX * 2, maxW);
   const left = (window.innerWidth - w) / 2;
 
   expand.style.transition = '';
   overlay.classList.add('open');
-  expand.style.top = margin + 'px';
+  expand.style.top = marginY + 'px';
   expand.style.left = left + 'px';
   expand.style.width = w + 'px';
-  expand.style.height = (window.innerHeight - margin * 2) + 'px';
+  expand.style.height = (window.innerHeight - marginY * 2) + 'px';
   expand.style.borderRadius = '16px';
 }
 
