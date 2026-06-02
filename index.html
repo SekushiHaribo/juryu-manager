@@ -1,0 +1,2417 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="주류 관리" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#2563eb" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icon-180.png" />
+  <title>주류 관리</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --primary-light: #dbeafe;
+      --danger: #dc2626;
+      --success: #16a34a;
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --border: #e2e8f0;
+      --text: #1e293b;
+      --muted: #64748b;
+      --radius: 14px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      overflow-x: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--primary);
+      color: white;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      box-shadow: 0 2px 8px rgba(0,0,0,.2);
+    }
+    header h1 { font-size: 17px; font-weight: 700; }
+    header .date { font-size: 12px; opacity: .8; margin-top: 1px; }
+    .header-left { display: flex; flex-direction: column; }
+    .settings-btn {
+      background: rgba(255,255,255,.18);
+      border: none;
+      color: white;
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      font-size: 20px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+      transition: background .15s;
+    }
+    .settings-btn:active { background: rgba(255,255,255,.32); }
+
+    /* ── Nav tabs ── */
+    nav {
+      display: flex;
+      background: white;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 68px;
+      z-index: 199;
+    }
+    nav button {
+      flex: 1;
+      padding: 13px 4px;
+      border: none;
+      background: none;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: all .2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    nav button.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
+    /* ── Main ── */
+    main { padding: 14px; max-width: 640px; margin: 0 auto; }
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* ══════════════════════════════════════
+       RECORD PAGE — fridge card grid
+    ══════════════════════════════════════ */
+    .fridge-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    /* Each card is ~half screen width, with a 3:4 (width:height) portrait ratio */
+    .fridge-card, .add-fridge-card {
+      width: calc(50% - 5px);
+      aspect-ratio: 3 / 4;
+      border-radius: var(--radius);
+      position: relative;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── Add-fridge placeholder ── */
+    .add-fridge-card {
+      background: white;
+      border: 2px dashed var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+    }
+    .add-fridge-card:active { background: var(--primary-light); border-color: var(--primary); }
+    .add-fridge-card .plus-icon {
+      width: 48px; height: 48px;
+      border-radius: 50%;
+      background: var(--primary-light);
+      color: var(--primary);
+      font-size: 28px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 300;
+    }
+    .add-fridge-card span { font-size: 13px; color: var(--muted); font-weight: 500; }
+
+    /* ── Fridge card ── */
+    .fridge-card {
+      background: white;
+      border: 1px solid var(--border);
+      box-shadow: 0 1px 4px rgba(0,0,0,.06);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      cursor: pointer;
+      transition: transform .15s, box-shadow .15s;
+      user-select: none;
+    }
+    .fridge-card:active:not(.dragging) { transform: scale(.97); }
+    .fridge-card.dragging {
+      opacity: .55;
+      box-shadow: 0 8px 24px rgba(0,0,0,.18);
+      transform: scale(1.03);
+      z-index: 500;
+    }
+    .fridge-card.drag-over { border: 2px dashed var(--primary); background: var(--primary-light); }
+
+    .fridge-card-header {
+      background: var(--primary);
+      color: white;
+      padding: 8px 8px 8px 12px;
+      position: relative;
+    }
+    /* delete button — top-right corner, aligned with the name/edit row */
+    .fridge-del-btn {
+      position: absolute;
+      top: 8px; right: 8px;
+      width: 26px; height: 26px;
+      border: none;
+      border-radius: 7px;
+      background: rgba(255,255,255,.18);
+      color: white;
+      font-size: 14px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+      transition: background .15s;
+      z-index: 2;
+    }
+    .fridge-del-btn:active { background: rgba(255,0,0,.45); }
+
+    .fridge-card-title-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-height: 26px;          /* same as the buttons so the row lines up */
+      padding-right: 34px;       /* room for delete button */
+    }
+    .fridge-card-header .fname {
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.3;
+      word-break: break-all;
+      flex: 1;
+      min-width: 0;
+    }
+    .fridge-edit-btn {
+      flex-shrink: 0;
+      width: 26px; height: 26px;  /* match delete button */
+      border: none;
+      border-radius: 7px;
+      background: rgba(255,255,255,.18);
+      color: white;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+      transition: background .15s;
+    }
+    .fridge-edit-btn:active { background: rgba(255,255,255,.4); }
+
+    /* inline rename input */
+    .fname-edit {
+      flex: 1;
+      min-width: 0;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 4px 6px;
+      border: none;
+      border-radius: 6px;
+      color: var(--text);
+    }
+    .fname-edit:focus { outline: 2px solid #fff; }
+    .fname-save-btn {
+      flex-shrink: 0;
+      width: 24px; height: 24px;
+      border: none;
+      border-radius: 6px;
+      background: #fff;
+      color: var(--primary);
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .fridge-card-header .ftotal {
+      font-size: 20px;
+      font-weight: 800;
+      white-space: nowrap;
+      margin-top: 4px;
+    }
+    .fridge-card-header .ftotal-unit {
+      font-size: 11px;
+      opacity: .75;
+      margin-left: 1px;
+    }
+    .fridge-card-body {
+      flex: 1;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      overflow: hidden;
+    }
+    .fridge-card-drink {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 4px;
+      font-size: 12px;
+    }
+    .fridge-card-drink .dstripe {
+      width: 8px; height: 8px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+    .fridge-card-drink .dname {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--text);
+    }
+    .fridge-card-drink .dcnt {
+      font-weight: 700;
+      color: var(--primary);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .fridge-card-footer {
+      padding: 8px 10px;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--muted);
+      text-align: center;
+    }
+    .no-drinks-hint {
+      font-size: 11px;
+      color: var(--muted);
+      text-align: center;
+      padding: 8px 0;
+    }
+
+    /* ══════════════════════════════════════
+       CARD EXPAND (tap → zoom card to detail)
+    ══════════════════════════════════════ */
+    .expand-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0);
+      z-index: 350;
+      pointer-events: none;
+      transition: background .28s ease;
+    }
+    .expand-overlay.open { background: rgba(0,0,0,.4); pointer-events: all; }
+
+    .card-expand {
+      position: fixed;
+      background: white;
+      border-radius: var(--radius);
+      z-index: 351;
+      overflow: hidden;
+      display: none;
+      flex-direction: column;
+      box-shadow: 0 12px 40px rgba(0,0,0,.25);
+      /* animate the zoom */
+      transition: top .3s cubic-bezier(.32,.72,.3,1),
+                  left .3s cubic-bezier(.32,.72,.3,1),
+                  width .3s cubic-bezier(.32,.72,.3,1),
+                  height .3s cubic-bezier(.32,.72,.3,1),
+                  border-radius .3s ease;
+    }
+    .card-expand .ce-header {
+      background: var(--primary);
+      color: white;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .card-expand .ce-title { font-size: 18px; font-weight: 700; }
+    .card-expand .ce-close {
+      width: 34px; height: 34px;
+      border: none; border-radius: 9px;
+      background: rgba(255,255,255,.2);
+      color: white; font-size: 18px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+      flex-shrink: 0;
+    }
+    .card-expand .ce-body {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      font-size: 14px;
+      text-align: center;
+      padding: 24px;
+    }
+    /* editor mode fills the body with no centering/padding */
+    .card-expand .ce-body.editor {
+      display: block;
+      padding: 0;
+      color: var(--text);
+      overflow: hidden;
+    }
+
+    /* ── Layout editor (bays of 5 shelves × 8 slots + drink palette) ── */
+    .layout-editor {
+      display: flex;
+      gap: 10px;
+      height: 100%;
+      padding: 12px;
+    }
+    /* carousel: labels fixed on the left, one bay pane visible at a time */
+    .bays-wrap {
+      flex: 1;
+      min-width: 0;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    .pager-row {
+      flex: 1;
+      display: flex;
+      gap: 10px;
+      min-height: 0;
+    }
+    .shelf-labels {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .shelf-labels .labels-inner {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .shelf-label {
+      flex: 1;
+      width: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+    }
+    .pager {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      touch-action: none;
+    }
+    .pager-track {
+      display: flex;
+      height: 100%;
+      width: 100%;
+      transition: transform .32s cubic-bezier(.32,.72,.3,1);
+    }
+    .pager-track.no-anim { transition: none; }
+    .bay-pane {
+      flex: 0 0 100%;
+      width: 100%;
+      min-width: 0;
+    }
+    .bay-shelves {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-height: 0;
+    }
+
+    /* controls bar under the pager */
+    .bay-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding-top: 10px;
+      flex-shrink: 0;
+    }
+    .pager-nav {
+      width: 32px; height: 32px;
+      border: 1px solid var(--border);
+      background: white;
+      border-radius: 8px;
+      font-size: 18px;
+      color: var(--primary);
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .pager-nav:disabled { color: var(--border); cursor: default; }
+    .pager-dots { display: flex; gap: 6px; align-items: center; }
+    .pager-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--border);
+      transition: width .2s, background .2s;
+      cursor: pointer;
+    }
+    .pager-dot.on { background: var(--primary); width: 18px; border-radius: 4px; }
+    .bay-add {
+      border: 1px solid var(--primary);
+      background: white;
+      color: var(--primary);
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 6px 12px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .bay-add:active { background: var(--primary-light); }
+    .bay-remove {
+      border: 1px solid var(--danger);
+      color: var(--danger);
+      background: white;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 6px 12px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .bay-remove:active { background: #fee2e2; }
+    .shelf-slots {
+      flex: 1;
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 4px;
+      touch-action: none;
+    }
+    .slot {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #f8fafc;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 700;
+      color: #fff;
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .slot.empty { color: var(--muted); }
+
+    /* normal-mode merged view */
+    .layout-view { height: 100%; padding: 12px; }
+    .shelf-slots.view { touch-action: auto; }
+    .mslot {
+      position: relative;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: #fff;
+      overflow: hidden;
+      padding: 2px;
+      text-align: center;
+      line-height: 1.2;
+      word-break: break-all;
+    }
+    /* faint vertical lines marking each original slot boundary.
+       Masked so they appear only at the top & bottom, leaving the center
+       (where the name label sits) clear. */
+    .mslot::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background-image: repeating-linear-gradient(
+        to right,
+        rgba(255,255,255,0) 0,
+        rgba(255,255,255,0) calc(100% / var(--n, 1) - 1px),
+        rgba(255,255,255,.28) calc(100% / var(--n, 1) - 1px),
+        rgba(255,255,255,.28) calc(100% / var(--n, 1))
+      );
+      -webkit-mask-image: linear-gradient(to bottom, #000 0 34%, transparent 34% 66%, #000 66% 100%);
+      mask-image: linear-gradient(to bottom, #000 0 34%, transparent 34% 66%, #000 66% 100%);
+    }
+    .mslot-label {
+      position: relative;
+      z-index: 1;
+      background: rgba(60, 60, 60, .55);
+      color: #fff;
+      padding: 2px 6px;
+      border-radius: 5px;
+    }
+    .mslot.empty { background: #f8fafc; border: 1px solid var(--border); }
+    .mslot.empty::before { content: none; }
+
+    .palette {
+      width: 96px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      overflow-y: auto;
+      padding-right: 2px;
+    }
+    .drink-pick {
+      padding: 9px 6px;
+      border: 1px solid var(--border);
+      border-left-width: 6px;
+      border-radius: 8px;
+      background: white;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .drink-pick.active {
+      outline: 3px solid var(--primary);
+      outline-offset: -1px;
+    }
+    .drink-pick.eraser { border-left-color: #94a3b8; color: var(--muted); }
+    .palette-cat { font-size: 11px; font-weight: 700; color: var(--muted); padding: 0 2px 2px; }
+    .palette-divider { height: 1px; background: var(--border); margin: 6px 0; flex-shrink: 0; }
+    .palette-hint { font-size: 12px; color: var(--muted); padding: 8px; text-align: center; }
+
+    /* ══════════════════════════════════════
+       FRIDGE DETAIL SHEET (bottom sheet)
+    ══════════════════════════════════════ */
+    .sheet-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.35);
+      z-index: 300;
+      opacity: 0; pointer-events: none;
+      transition: opacity .25s;
+    }
+    .sheet-overlay.open { opacity: 1; pointer-events: all; }
+
+    .sheet {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      max-width: 640px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 20px 20px 0 0;
+      z-index: 301;
+      transform: translateY(100%);
+      transition: transform .3s cubic-bezier(.32,1,.4,1);
+      max-height: 85dvh;
+      display: flex;
+      flex-direction: column;
+    }
+    .sheet.open { transform: translateY(0); }
+
+    .sheet-handle {
+      width: 40px; height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      margin: 10px auto 4px;
+      flex-shrink: 0;
+    }
+    .sheet-header {
+      padding: 8px 16px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .sheet-header h2 { font-size: 16px; font-weight: 700; }
+    .sheet-header .sheet-total {
+      font-size: 13px;
+      background: var(--primary-light);
+      color: var(--primary-dark);
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-weight: 700;
+    }
+    .sheet-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 0;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .sheet-drink-row {
+      display: flex;
+      align-items: center;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      gap: 10px;
+    }
+    .sheet-drink-row:last-child { border-bottom: none; }
+    .sheet-drink-name { flex: 1; font-size: 14px; font-weight: 500; }
+
+    /* Counter — all on the RIGHT for right-hand use */
+    .counter {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .cnt-btn {
+      width: 38px; height: 38px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      font-size: 20px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--primary);
+      -webkit-tap-highlight-color: transparent;
+      transition: background .12s;
+    }
+    .cnt-btn:active { background: var(--primary-light); }
+    .cnt-btn.minus { color: var(--danger); }
+    .cnt-input {
+      width: 50px; height: 38px;
+      text-align: center;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .cnt-input:focus { outline: 2px solid var(--primary); border-color: transparent; }
+
+    .sheet-empty {
+      text-align: center;
+      color: var(--muted);
+      padding: 32px 20px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    /* ══════════════════════════════════════
+       SUMMARY PAGE
+    ══════════════════════════════════════ */
+    .total-banner {
+      background: var(--primary);
+      color: white;
+      border-radius: var(--radius);
+      padding: 22px;
+      text-align: center;
+      margin-bottom: 14px;
+    }
+    .total-banner .label { font-size: 13px; opacity: .8; margin-bottom: 2px; }
+    .total-banner .num { font-size: 48px; font-weight: 800; line-height: 1; }
+    .total-banner .unit { font-size: 15px; opacity: .75; }
+
+    .sum-card {
+      background: white;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+    .sum-card-title {
+      padding: 12px 16px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      background: #f8fafc;
+    }
+    .sum-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .sum-table td { padding: 11px 16px; border-bottom: 1px solid var(--border); }
+    .sum-table tr:last-child td { border-bottom: none; }
+    .sum-table .num-cell { text-align: right; font-weight: 700; color: var(--primary); }
+
+    /* ══════════════════════════════════════
+       SETTINGS DRAWER (slides from right)
+    ══════════════════════════════════════ */
+    .drawer-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.35);
+      z-index: 400;
+      opacity: 0; pointer-events: none;
+      transition: opacity .25s;
+    }
+    .drawer-overlay.open { opacity: 1; pointer-events: all; }
+
+    .drawer {
+      position: fixed;
+      top: 0; right: 0; bottom: 0;
+      width: min(340px, 90vw);
+      background: white;
+      z-index: 401;
+      transform: translateX(100%);
+      transition: transform .3s cubic-bezier(.32,1,.4,1);
+      display: flex;
+      flex-direction: column;
+      box-shadow: -4px 0 24px rgba(0,0,0,.15);
+    }
+    .drawer.open { transform: translateX(0); }
+
+    .drawer-header {
+      padding: 16px 16px 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #f8fafc;
+      flex-shrink: 0;
+    }
+    .drawer-header h2 { font-size: 16px; font-weight: 700; }
+    .drawer-close {
+      background: none; border: none; font-size: 22px;
+      color: var(--muted); cursor: pointer; padding: 4px;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .drawer-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .drawer-section { margin-bottom: 22px; }
+    .drawer-section h3 {
+      font-size: 11px; font-weight: 700;
+      color: var(--muted); text-transform: uppercase;
+      letter-spacing: .6px; margin-bottom: 8px; padding: 0 2px;
+    }
+
+    .item-list {
+      background: white;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+    .item-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 11px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .item-row:last-child { border-bottom: none; }
+    .item-row span { flex: 1; font-size: 14px; }
+    .del-btn {
+      background: none; border: none; cursor: pointer;
+      color: var(--danger); font-size: 17px; padding: 4px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .empty-list { text-align: center; color: var(--muted); padding: 14px; font-size: 13px; }
+
+    /* drink categories */
+    .cat-group { margin-bottom: 16px; }
+    .cat-group h4 {
+      font-size: 13px; font-weight: 700; color: var(--text);
+      margin-bottom: 6px; padding: 0 2px;
+    }
+    /* color shown as a stripe across the top of the item */
+    #drinkCategories .item-row { position: relative; padding-top: 14px; }
+    .item-row .row-stripe {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 5px;
+    }
+    .item-row .item-cap {
+      font-size: 11px; color: var(--muted); flex-shrink: 0; margin-right: 2px;
+    }
+    .item-row.long-pressing { background: var(--primary-light); }
+    .cap-toggle {
+      width: 42px; flex-shrink: 0;
+      border: 1px solid var(--primary);
+      background: white; color: var(--primary);
+      border-radius: 10px; font-size: 14px; font-weight: 700;
+      cursor: pointer; -webkit-tap-highlight-color: transparent;
+    }
+    .cap-toggle:active { background: var(--primary-light); }
+
+    /* color picker popup */
+    .cp-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.35);
+      z-index: 500; opacity: 0; pointer-events: none; transition: opacity .2s;
+    }
+    .cp-overlay.open { opacity: 1; pointer-events: all; }
+    .cp-popup {
+      position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%);
+      z-index: 501; background: white; border-radius: 16px; padding: 16px;
+      width: min(290px, 86vw);
+      box-shadow: 0 14px 36px rgba(0,0,0,.28);
+      display: none;
+    }
+    .cp-popup.open { display: block; }
+    .cp-title { font-size: 14px; font-weight: 700; text-align: center; margin-bottom: 12px; }
+    .cp-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+    .cp-swatch {
+      aspect-ratio: 1; border-radius: 50%;
+      border: 3px solid transparent; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .cp-swatch.sel { border-color: var(--text); }
+
+    /* fill-count input */
+    .fill-row { display: flex; gap: 10px; align-items: center; justify-content: center; }
+    .fill-step {
+      width: 44px; height: 44px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      border-radius: 10px;
+      font-size: 22px; font-weight: 700;
+      color: var(--primary);
+      cursor: pointer; -webkit-tap-highlight-color: transparent;
+    }
+    #fillInput {
+      width: 84px; height: 44px;
+      text-align: center;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 20px; font-weight: 700;
+      -moz-appearance: textfield;
+      appearance: textfield;
+    }
+    #fillInput::-webkit-outer-spin-button,
+    #fillInput::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    .fill-progress { font-size: 12px; color: var(--muted); font-weight: 600; }
+    .fill-mode-toggle { display: flex; gap: 6px; justify-content: center; margin: 12px 0; }
+    .fmode {
+      padding: 6px 16px; border: 1px solid var(--border);
+      background: white; color: var(--muted);
+      border-radius: 8px; font-size: 13px; font-weight: 600;
+      cursor: pointer; -webkit-tap-highlight-color: transparent;
+    }
+    .fmode.on { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .fillgrid {
+      display: grid; gap: 4px; justify-content: center;
+      margin: 4px auto 0; touch-action: none;
+    }
+    .fillcell {
+      width: 26px; height: 26px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: #fff;
+    }
+    .fillcell.on { background: var(--danger); border-color: var(--danger); }
+    .fill-count-label { text-align: center; margin-top: 10px; font-size: 13px; color: var(--text); }
+    .fill-count-label b { color: var(--danger); font-size: 15px; }
+    .mslot.editing { outline: 3px solid #fff; outline-offset: -2px; box-shadow: 0 0 0 2px var(--primary); }
+    /* fill badge on a merged block */
+    .mslot-fill {
+      position: absolute;
+      z-index: 2;
+      right: 3px; bottom: 3px;
+      min-width: 18px; height: 18px;
+      padding: 0 4px;
+      border-radius: 9px;
+      background: #fff;
+      color: var(--text);
+      font-size: 11px; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,.3);
+    }
+
+    .add-row { display: flex; gap: 8px; }
+    .add-row input {
+      flex: 1; padding: 10px 13px;
+      border: 1px solid var(--border); border-radius: 10px;
+      font-size: 14px;
+    }
+    .add-row input:focus { outline: 2px solid var(--primary); border-color: transparent; }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 10px 16px;
+      border-radius: 10px;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: opacity .15s;
+      white-space: nowrap;
+    }
+    .btn:active { opacity: .78; }
+    .btn-primary { background: var(--primary); color: white; }
+    /* inactive toggle look (base .btn used by edit-mode button when off) */
+    #editModeBtn.btn:not(.btn-primary),
+    #hideAddBtn.btn:not(.btn-primary) {
+      background: white;
+      color: var(--primary);
+      border: 1px solid var(--primary);
+    }
+    .btn-danger { background: var(--danger); color: white; }
+    .btn-sm { padding: 8px 13px; font-size: 13px; }
+
+    .reset-row { padding-top: 8px; }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+      background: #1e293b; color: white;
+      padding: 10px 20px; border-radius: 20px;
+      font-size: 13px; font-weight: 600;
+      opacity: 0; pointer-events: none;
+      transition: opacity .3s;
+      z-index: 999;
+      white-space: nowrap;
+    }
+    .toast.show { opacity: 1; }
+
+    /* ── Drag ghost ── */
+    #dragGhost {
+      position: fixed;
+      pointer-events: none;
+      z-index: 600;
+      opacity: .85;
+      border-radius: var(--radius);
+      box-shadow: 0 12px 32px rgba(0,0,0,.25);
+      transform-origin: center center;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>🧊 주류 관리</h1>
+    <span class="date" id="headerDate"></span>
+  </div>
+  <button class="settings-btn" onclick="openSettings()" title="설정">⚙️</button>
+</header>
+
+<nav>
+  <button class="active" onclick="showPage('record')">기록</button>
+  <button onclick="showPage('summary')">합계</button>
+</nav>
+
+<main>
+  <!-- ── 기록 페이지 ── -->
+  <div id="page-record" class="page active">
+    <div class="fridge-grid" id="fridgeGrid">
+      <!-- cards injected by JS -->
+    </div>
+  </div>
+
+  <!-- ── 합계 페이지 ── -->
+  <div id="page-summary" class="page">
+    <div class="total-banner">
+      <div class="label">오늘 총 판매</div>
+      <div><span class="num" id="grandTotal">0</span> <span class="unit">개</span></div>
+    </div>
+    <div class="sum-card">
+      <div class="sum-card-title">음료별 합계</div>
+      <table class="sum-table"><tbody id="sumByDrink"></tbody></table>
+    </div>
+    <div class="sum-card">
+      <div class="sum-card-title">냉장고별 합계</div>
+      <table class="sum-table"><tbody id="sumByFridge"></tbody></table>
+    </div>
+  </div>
+</main>
+
+<!-- ══ Card Expand (tap → zoom) ══ -->
+<div class="expand-overlay" id="expandOverlay" onclick="closeDetail()"></div>
+<div class="card-expand" id="cardExpand">
+  <div class="ce-header">
+    <span class="ce-title" id="ceTitle">냉장고</span>
+  </div>
+  <div class="ce-body" id="ceBody">상세 정보는 곧 추가될 예정입니다.</div>
+</div>
+
+<!-- ══ Fridge Detail Sheet ══ -->
+<div class="sheet-overlay" id="sheetOverlay" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header">
+    <h2 id="sheetTitle">냉장고</h2>
+    <span class="sheet-total" id="sheetTotal">0개</span>
+  </div>
+  <div class="sheet-body" id="sheetBody"></div>
+</div>
+
+<!-- ══ Settings Drawer ══ -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeSettings()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-header">
+    <h2>설정</h2>
+    <button class="drawer-close" onclick="closeSettings()">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="drawer-section">
+      <h3>카드 편집</h3>
+      <button class="btn" id="editModeBtn" style="width:100%" onclick="toggleEditMode()">수정 모드</button>
+      <p style="font-size:12px;color:var(--muted);margin-top:6px;padding:0 2px;line-height:1.5">
+        켜면 기록 탭의 카드에 이름 수정·삭제 버튼이 나타납니다.
+      </p>
+      <button class="btn" id="hideAddBtn" style="width:100%;margin-top:10px" onclick="toggleHideAddCard()">냉장고 추가 숨기기</button>
+      <p style="font-size:12px;color:var(--muted);margin-top:6px;padding:0 2px;line-height:1.5">
+        켜면 기록 탭에서 '냉장고 추가' 카드가 보이지 않습니다.
+      </p>
+    </div>
+    <div class="drawer-section">
+      <h3>냉장고</h3>
+      <div class="item-list" id="fridgeSettingList"></div>
+      <div class="add-row">
+        <input id="newFridgeName" type="text" placeholder="냉장고 이름" maxlength="20" />
+        <button class="btn btn-primary btn-sm" onclick="addFridge()">추가</button>
+      </div>
+    </div>
+    <div class="drawer-section">
+      <h3>주류 목록</h3>
+      <div id="drinkCategories"></div>
+    </div>
+    <div class="drawer-section reset-row">
+      <h3>초기화</h3>
+      <button class="btn btn-danger" style="width:100%" onclick="resetToday()">오늘 기록 초기화</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Color Picker ══ -->
+<div class="cp-overlay" id="cpOverlay" onclick="closeColorPicker()"></div>
+<div class="cp-popup" id="cpPopup"></div>
+
+<!-- ══ Fill-count input ══ -->
+<div class="cp-overlay" id="fillOverlay" onclick="closeFillPopup()"></div>
+<div class="cp-popup" id="fillPopup"></div>
+
+<!-- Drag ghost element -->
+<div id="dragGhost"></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════
+const STORAGE_KEY = 'fridgeTracker_v2';
+
+function defaultState() {
+  return { fridges: [], drinks: [], records: {} };
+}
+function loadState() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || defaultState(); }
+  catch { return defaultState(); }
+}
+function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+let state = loadState();
+
+// active sheet fridge id
+let activeSheetFridge = null;
+
+// edit mode — when on, cards show rename/delete buttons
+let editMode = false;
+
+// hide the "냉장고 추가" (+) card on the record grid
+let hideAddCard = false;
+
+// ════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function formatDateKo(k) {
+  const [y,m,d] = k.split('-');
+  return `${y}년 ${+m}월 ${+d}일`;
+}
+document.getElementById('headerDate').textContent = formatDateKo(todayKey());
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function getCount(fid, did) {
+  return state.records[todayKey()]?.[fid]?.[did] ?? 0;
+}
+function setCount(fid, did, val) {
+  const day = todayKey();
+  if (!state.records[day]) state.records[day] = {};
+  if (!state.records[day][fid]) state.records[day][fid] = {};
+  state.records[day][fid][did] = Math.max(0, val);
+  save();
+}
+function fridgeTotal(fid) {
+  return state.drinks.reduce((s, d) => s + getCount(fid, d.id), 0);
+}
+
+// today's entered fill counts for a fridge, summed per drink (by reading
+// which drink occupies each filled block position)
+function fridgeFillByDrink(f) {
+  const totals = {};
+  if (!state.fills || !Array.isArray(f.bays)) return totals;
+  const prefix = `${todayKey()}|${f.id}|`;
+  Object.keys(state.fills).forEach(k => {
+    if (!k.startsWith(prefix)) return;
+    const p = k.split('|');                  // [day, fid, bi, s, start]
+    const bi = +p[2], s = +p[3], start = +p[4];
+    const did = f.bays[bi] && f.bays[bi][s] ? f.bays[bi][s][start] : null;
+    if (!did) return;
+    totals[did] = (totals[did] || 0) + state.fills[k];
+  });
+  return totals;
+}
+
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// ════════════════════════════════════════
+// PAGE NAV
+// ════════════════════════════════════════
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach((b,i) => {
+    b.classList.toggle('active', ['record','summary'][i] === name);
+  });
+  document.getElementById('page-' + name).classList.add('active');
+  if (name === 'summary') renderSummary();
+}
+
+// ════════════════════════════════════════
+// FRIDGE GRID (record page)
+// ════════════════════════════════════════
+function renderGrid() {
+  const grid = document.getElementById('fridgeGrid');
+  grid.innerHTML = '';
+
+  state.fridges.forEach((f, idx) => {
+    const card = document.createElement('div');
+    card.className = 'fridge-card';
+    card.dataset.fridgeId = f.id;
+    card.dataset.idx = idx;
+
+    // show only drinks that need filling (entered count > 0), summed per drink
+    const fills = fridgeFillByDrink(f);
+    const entries = state.drinks
+      .filter(d => fills[d.id] > 0)
+      .map(d => ({ name: d.name, color: drinkColor(d.id), cnt: fills[d.id] }));
+    const total = entries.reduce((s, e) => s + e.cnt, 0);
+
+    let drinkRows;
+    if (entries.length === 0) {
+      drinkRows = `<div class="no-drinks-hint">채울 주류 없음</div>`;
+    } else {
+      drinkRows = entries.slice(0, 6).map(e => `
+        <div class="fridge-card-drink">
+          <span class="dstripe" style="background:${e.color}"></span>
+          <span class="dname">${escHtml(e.name)}</span>
+          <span class="dcnt">${e.cnt}</span>
+        </div>`).join('');
+    }
+
+    const editControls = editMode ? `<button class="fridge-del-btn" title="삭제">✕</button>` : '';
+    const editBtnHtml = editMode ? `<button class="fridge-edit-btn" title="이름 수정">✎</button>` : '';
+
+    card.innerHTML = `
+      <div class="fridge-card-header">${editControls}
+        <div class="fridge-card-title-row">
+          <span class="fname">${escHtml(f.name)}</span>${editBtnHtml}
+        </div>
+        <div><span class="ftotal">${total}</span><span class="ftotal-unit">개</span></div>
+      </div>
+      <div class="fridge-card-body">${drinkRows}</div>
+      <div class="fridge-card-footer">${editMode ? '꾹 눌러 이동' : '탭하여 입력'}</div>
+    `;
+
+    // tap → zoom card into detail view (works in edit mode too)
+    card.addEventListener('click', () => openDetail(f.id, card));
+
+    if (editMode) {
+      const delBtn = card.querySelector('.fridge-del-btn');
+      const editBtn = card.querySelector('.fridge-edit-btn');
+      // stop these buttons from triggering the card's tap-to-open or long-press drag
+      ['mousedown','touchstart'].forEach(ev => {
+        delBtn.addEventListener(ev, e => e.stopPropagation());
+        editBtn.addEventListener(ev, e => e.stopPropagation());
+      });
+      delBtn.addEventListener('click', e => { e.stopPropagation(); deleteFridge(f.id); });
+      editBtn.addEventListener('click', e => { e.stopPropagation(); startRename(card, f.id); });
+    }
+
+    // long-press → drag
+    setupDrag(card, f.id);
+
+    grid.appendChild(card);
+  });
+
+  // Add-fridge card (always last) — hidden when 추가 숨기기 is on
+  if (!hideAddCard) {
+    const addCard = document.createElement('div');
+    addCard.className = 'add-fridge-card';
+    addCard.innerHTML = `<div class="plus-icon">+</div><span>냉장고 추가</span>`;
+    addCard.addEventListener('click', quickAddFridge);
+    grid.appendChild(addCard);
+  }
+}
+
+// Inline rename inside a fridge card
+function startRename(card, fid) {
+  const f = state.fridges.find(x => x.id === fid);
+  if (!f) return;
+  const titleRow = card.querySelector('.fridge-card-title-row');
+  titleRow.innerHTML = `
+    <input class="fname-edit" type="text" maxlength="20" value="${escHtml(f.name)}" />
+    <button class="fname-save-btn" title="저장">✓</button>
+  `;
+  const input = titleRow.querySelector('.fname-edit');
+  const saveBtn = titleRow.querySelector('.fname-save-btn');
+
+  let done = false;
+  const commit = () => {
+    if (done) return; done = true;
+    const name = input.value.trim();
+    if (name) { f.name = name; save(); }
+    renderGrid();
+    renderSettingsDrawer();
+  };
+
+  // prevent card tap/drag while editing
+  ['click','mousedown','touchstart'].forEach(ev => {
+    input.addEventListener(ev, e => e.stopPropagation());
+    saveBtn.addEventListener(ev, e => e.stopPropagation());
+  });
+  saveBtn.addEventListener('click', e => { e.stopPropagation(); commit(); });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { done = true; renderGrid(); }
+  });
+  input.addEventListener('blur', commit);
+
+  input.focus();
+  input.select();
+}
+
+// ════════════════════════════════════════
+// CARD EXPAND (zoom card → detail)
+// ════════════════════════════════════════
+let detailFridge = null;
+
+// ── Layout model: 5 shelves × 8 slots, each slot holds a drinkId (or null) ──
+const SHELVES = 5;
+const SLOTS_PER_SHELF = 8;
+const SLOT_COLORS = [
+  '#ef4444','#f97316','#f59e0b','#eab308','#84cc16',
+  '#22c55e','#10b981','#14b8a6','#06b6d4','#0ea5e9',
+  '#3b82f6','#6366f1','#8b5cf6','#a855f7','#d946ef',
+  '#ec4899','#f43f5e','#78716c','#a16207','#1e293b'
+];
+
+// A fridge can hold multiple "bays" (sections) side by side; each bay is
+// 5 shelves × 8 slots. f.bays = [ bay, ... ].
+function emptyBay() {
+  return Array.from({ length: SHELVES }, () => Array(SLOTS_PER_SHELF).fill(null));
+}
+function normalizeBay(bay) {
+  const b = Array.isArray(bay) ? bay.slice(0, SHELVES) : [];
+  while (b.length < SHELVES) b.push(Array(SLOTS_PER_SHELF).fill(null));
+  return b.map(row => {
+    const r = Array.isArray(row) ? row.slice(0, SLOTS_PER_SHELF) : [];
+    while (r.length < SLOTS_PER_SHELF) r.push(null);
+    return r;
+  });
+}
+function ensureBays(f) {
+  if (!Array.isArray(f.bays)) {
+    f.bays = [Array.isArray(f.layout) ? f.layout : emptyBay()];
+    delete f.layout;
+  }
+  if (f.bays.length === 0) f.bays = [emptyBay()];
+  f.bays = f.bays.map(normalizeBay);
+  return f.bays;
+}
+
+function drinkColor(did) {
+  const d = state.drinks.find(x => x.id === did);
+  if (d && d.color) return d.color;
+  const i = state.drinks.findIndex(x => x.id === did);
+  return SLOT_COLORS[(i < 0 ? 0 : i) % SLOT_COLORS.length];
+}
+
+// drink categories with default per-line capacity (기타 uses the 5/6 toggle)
+const DRINK_CATS = [
+  { key: 'soju',  label: '소주', cap: 6 },
+  { key: 'beer',  label: '맥주', cap: 5 },
+  { key: 'drink', label: '음료', cap: 6 },
+  { key: 'etc',   label: '기타', cap: null },
+];
+let etcCap = 6;       // current 기타 toggle value (5 or 6)
+let cpDrinkId = null; // drink whose color is being edited
+
+// painting state for the layout editor
+let selectedDrink = null;   // drinkId | 'ERASE' | null
+let painting = false;
+let currentBay = 0;         // index of the bay shown in the carousel
+
+function renderDetailBody(f) {
+  const body = document.getElementById('ceBody');
+  selectedDrink = null;
+  painting = false;
+
+  ensureBays(f);
+  currentBay = Math.max(0, Math.min(currentBay, f.bays.length - 1));
+  body.className = 'ce-body editor';
+
+  // one pane per bay; only the current one is visible (carousel)
+  let panes = '';
+  f.bays.forEach((bay, bi) => {
+    let rows = '';
+    for (let s = SHELVES - 1; s >= 0; s--) {
+      if (editMode) {
+        let slots = '';
+        for (let c = 0; c < SLOTS_PER_SHELF; c++) slots += slotHtml(bi, s, c, bay[s][c]);
+        rows += `<div class="shelf-slots" data-bay="${bi}" data-shelf="${s}">${slots}</div>`;
+      } else {
+        let col = 0;
+        const cells = mergeRuns(bay[s]).map(r => {
+          const start = col; col += r.span;
+          if (!r.did) return `<div class="mslot empty" style="grid-column:span ${r.span}"></div>`;
+          const d = state.drinks.find(x => x.id === r.did);
+          const fill = getFill(f.id, bi, s, start);
+          const badge = fill > 0 ? `<span class="mslot-fill">${fill}</span>` : '';
+          return `<div class="mslot" data-bay="${bi}" data-shelf="${s}" data-start="${start}" data-did="${r.did}" style="grid-column:span ${r.span};background:${drinkColor(r.did)};--n:${r.span}">
+            <span class="mslot-label">${escHtml(d ? d.name : '')}</span>${badge}
+          </div>`;
+        }).join('');
+        rows += `<div class="shelf-slots view">${cells}</div>`;
+      }
+    }
+    panes += `<div class="bay-pane"><div class="bay-shelves">${rows}</div></div>`;
+  });
+
+  const dots = f.bays.map((_, i) =>
+    `<span class="pager-dot ${i === currentBay ? 'on' : ''}" data-i="${i}"></span>`).join('');
+  const addBtn = editMode ? `<button class="bay-add" title="칸 추가">＋ 칸</button>` : '';
+  const removeBtn = (editMode && f.bays.length > 1) ? `<button class="bay-remove">현재 칸 제거</button>` : '';
+  const controls = `<div class="bay-controls">
+    <button class="pager-nav prev" ${currentBay === 0 ? 'disabled' : ''}>‹</button>
+    <div class="pager-dots">${dots}</div>
+    <button class="pager-nav next" ${currentBay === f.bays.length - 1 ? 'disabled' : ''}>›</button>
+    ${addBtn}${removeBtn}
+  </div>`;
+
+  const baysWrap = `<div class="bays-wrap">
+    <div class="pager-row">
+      ${shelfLabelsHtml()}
+      <div class="pager">
+        <div class="pager-track" style="transform:translateX(-${currentBay * 100}%)">${panes}</div>
+      </div>
+    </div>
+    ${controls}
+  </div>`;
+
+  let palette = '';
+  if (editMode) {
+    if (state.drinks.length === 0) {
+      palette = `<div class="palette"><div class="palette-hint">설정에서 주류를<br>먼저 추가하세요</div></div>`;
+    } else {
+      const groups = [];
+      DRINK_CATS.forEach(cat => {
+        const items = state.drinks.filter(d => (d.category || 'etc') === cat.key);
+        if (!items.length) return;
+        const btns = items.map(d =>
+          `<button class="drink-pick" data-did="${d.id}" style="border-left-color:${drinkColor(d.id)}">${escHtml(d.name)}</button>`
+        ).join('');
+        groups.push(`<div class="palette-cat">${cat.label}</div>${btns}`);
+      });
+      groups.push(`<div class="palette-cat">제거</div><button class="drink-pick eraser" data-erase="1">제거</button>`);
+      palette = `<div class="palette">${groups.join('<div class="palette-divider"></div>')}</div>`;
+    }
+  }
+
+  body.innerHTML = `<div class="layout-editor">${baysWrap}${palette}</div>`;
+  wireDetail(body, f);
+}
+
+// shared shelf-label column (5층…1층)
+function shelfLabelsHtml() {
+  let labels = '';
+  for (let s = SHELVES - 1; s >= 0; s--) labels += `<div class="shelf-label">${s + 1}층</div>`;
+  return `<div class="shelf-labels"><div class="labels-inner">${labels}</div></div>`;
+}
+
+// ── per-day fill counts for a merged block (fridge|bay|shelf|startCol) ──
+function fillKey(fid, bi, s, start) {
+  return `${todayKey()}|${fid}|${bi}|${s}|${start}`;
+}
+function getFill(fid, bi, s, start) {
+  return (state.fills && state.fills[fillKey(fid, bi, s, start)]) || 0;
+}
+function setFill(fid, bi, s, start, v) {
+  if (!state.fills) state.fills = {};
+  const k = fillKey(fid, bi, s, start);
+  if (v > 0) state.fills[k] = v; else delete state.fills[k];
+  save();
+}
+// optional drag-mode pattern (which cells are marked missing) for a block
+function getFillCells(fid, bi, s, start) {
+  return (state.fillCells && state.fillCells[fillKey(fid, bi, s, start)]) || null;
+}
+function setFillCells(fid, bi, s, start, arr) {
+  if (!state.fillCells) state.fillCells = {};
+  const k = fillKey(fid, bi, s, start);
+  if (arr && arr.length) state.fillCells[k] = arr; else delete state.fillCells[k];
+}
+
+let fillMode = 'number';        // 'number' | 'drag'
+let fillPainted = new Set();    // marked cells in drag mode (current step)
+
+// ordered list of fillable (non-empty) blocks in a bay:
+// top shelf → bottom shelf, left → right within each shelf
+function buildFillOrder(f, bi) {
+  const order = [];
+  const bay = f.bays[bi];
+  for (let s = SHELVES - 1; s >= 0; s--) {
+    let col = 0;
+    mergeRuns(bay[s]).forEach(r => {
+      const start = col; col += r.span;
+      if (r.did && state.drinks.some(d => d.id === r.did)) order.push({ s, start, did: r.did, span: r.span });
+    });
+  }
+  return order;
+}
+
+let fillOrder = [];
+let fillCtx = null; // { fid, bi, idx }
+
+function openFillPopup(blockEl) {
+  const fid = detailFridge;
+  const bi = +blockEl.dataset.bay;
+  const f = state.fridges.find(x => x.id === fid);
+  if (!f) return;
+  fillOrder = buildFillOrder(f, bi);
+  const s = +blockEl.dataset.shelf, start = +blockEl.dataset.start;
+  let idx = fillOrder.findIndex(o => o.s === s && o.start === start);
+  if (idx < 0) idx = 0;
+  fillCtx = { fid, bi, idx };
+  document.getElementById('fillOverlay').classList.add('open');
+  document.getElementById('fillPopup').classList.add('open');
+  showFillStep(idx);
+}
+
+function showFillStep(idx) {
+  if (!fillCtx) return;
+  fillCtx.idx = idx;
+  const o = fillOrder[idx];
+  const d = state.drinks.find(x => x.id === o.did);
+  const cap = (d && d.capacity) || 6;
+  const span = o.span;
+  const total = span * cap;
+  const curFill = getFill(fillCtx.fid, fillCtx.bi, o.s, o.start);
+
+  // load painted set (stored pattern, else first N cells from the count)
+  const stored = getFillCells(fillCtx.fid, fillCtx.bi, o.s, o.start);
+  if (stored) {
+    fillPainted = new Set(stored.filter(i => i < total));
+  } else {
+    fillPainted = new Set();
+    for (let i = 0; i < Math.min(curFill, total); i++) fillPainted.add(i);
+  }
+
+  const isLast = idx === fillOrder.length - 1;
+  const popup = document.getElementById('fillPopup');
+
+  let bodyHtml;
+  if (fillMode === 'drag') {
+    let cells = '';
+    for (let i = 0; i < total; i++) cells += `<div class="fillcell ${fillPainted.has(i) ? 'on' : ''}" data-i="${i}"></div>`;
+    bodyHtml = `
+      <div class="fillgrid" data-span="${span}" style="grid-template-columns:repeat(${span},26px)">${cells}</div>
+      <div class="fill-count-label">빠진 개수 <b id="fillCountView">${fillPainted.size}</b> / ${total}</div>`;
+  } else {
+    bodyHtml = `
+      <div class="fill-row">
+        <button class="fill-step" data-d="-1">−</button>
+        <input id="fillInput" type="number" min="0" value="${curFill}" />
+        <button class="fill-step" data-d="1">＋</button>
+      </div>`;
+  }
+
+  popup.innerHTML = `
+    <div class="cp-title">${escHtml(d ? d.name : '')} 채울 개수
+      <span class="fill-progress">(${idx + 1}/${fillOrder.length})</span>
+    </div>
+    <div class="fill-mode-toggle">
+      <button class="fmode ${fillMode === 'number' ? 'on' : ''}" data-m="number">숫자</button>
+      <button class="fmode ${fillMode === 'drag' ? 'on' : ''}" data-m="drag">드래그</button>
+    </div>
+    ${bodyHtml}
+    <button class="btn btn-primary" id="fillNext" style="width:100%;margin-top:14px">${isLast ? '완료' : '다음 ›'}</button>`;
+
+  // mode toggle
+  popup.querySelectorAll('.fmode').forEach(b => b.addEventListener('click', () => {
+    if (b.dataset.m === fillMode) return;
+    commitCurrentFill();
+    fillMode = b.dataset.m;
+    showFillStep(fillCtx.idx);
+  }));
+
+  if (fillMode === 'drag') wireFillGrid(popup);
+  else wireFillNumber(popup);
+
+  const advance = () => {
+    commitCurrentFill();
+    if (fillCtx.idx < fillOrder.length - 1) showFillStep(fillCtx.idx + 1);
+    else closeFillPopup();
+  };
+  popup.querySelector('#fillNext').addEventListener('click', advance);
+
+  highlightFillBlock(o.s, o.start);
+}
+
+function wireFillNumber(popup) {
+  const input = popup.querySelector('#fillInput');
+  popup.querySelectorAll('.fill-step').forEach(b => b.addEventListener('click', () => {
+    input.value = Math.max(0, (parseInt(input.value, 10) || 0) + (+b.dataset.d));
+    input.focus();
+  }));
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); popup.querySelector('#fillNext').click(); }
+  });
+  input.focus();
+  input.select();
+}
+
+function wireFillGrid(popup) {
+  const grid = popup.querySelector('.fillgrid');
+  const countView = popup.querySelector('#fillCountView');
+  const span = +grid.dataset.span;
+  let painting = false, paintVal = true, startIdx = 0, baseSet = null;
+
+  const rectIdxs = (a, b) => {
+    const ar = Math.floor(a / span), ac = a % span;
+    const br = Math.floor(b / span), bc = b % span;
+    const r0 = Math.min(ar, br), r1 = Math.max(ar, br);
+    const c0 = Math.min(ac, bc), c1 = Math.max(ac, bc);
+    const out = [];
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) out.push(r * span + c);
+    return out;
+  };
+  const render = () => {
+    grid.querySelectorAll('.fillcell').forEach(cell => cell.classList.toggle('on', fillPainted.has(+cell.dataset.i)));
+    countView.textContent = fillPainted.size;
+  };
+  // fill the rectangle from the start cell to the current cell
+  const applyRect = curIdx => {
+    const set = new Set(baseSet);
+    rectIdxs(startIdx, curIdx).forEach(i => { if (paintVal) set.add(i); else set.delete(i); });
+    fillPainted = set;
+    render();
+  };
+  const cellFromPoint = (x, y) => {
+    const el = document.elementFromPoint(x, y);
+    return el && el.classList.contains('fillcell') ? el : null;
+  };
+
+  grid.addEventListener('pointerdown', e => {
+    const cell = e.target.closest('.fillcell');
+    if (!cell) return;
+    painting = true;
+    startIdx = +cell.dataset.i;
+    baseSet = new Set(fillPainted);
+    paintVal = !fillPainted.has(startIdx);   // direction based on the start cell
+    try { grid.setPointerCapture(e.pointerId); } catch {}
+    applyRect(startIdx);
+    e.preventDefault();
+  });
+  grid.addEventListener('pointermove', e => {
+    if (!painting) return;
+    const cell = cellFromPoint(e.clientX, e.clientY);
+    if (cell) applyRect(+cell.dataset.i);
+  });
+  const stop = () => { painting = false; };
+  grid.addEventListener('pointerup', stop);
+  grid.addEventListener('pointercancel', stop);
+}
+
+function commitCurrentFill() {
+  if (!fillCtx) return;
+  const o = fillOrder[fillCtx.idx];
+  if (fillMode === 'drag') {
+    setFill(fillCtx.fid, fillCtx.bi, o.s, o.start, fillPainted.size);
+    setFillCells(fillCtx.fid, fillCtx.bi, o.s, o.start, [...fillPainted]);
+  } else {
+    const inp = document.getElementById('fillInput');
+    if (!inp) return;
+    const v = Math.max(0, parseInt(inp.value, 10) || 0);
+    // reconcile the painted pattern to the typed count, preserving existing
+    // painted cells so switching back to drag keeps them in place
+    const d = state.drinks.find(x => x.id === o.did);
+    const total = o.span * ((d && d.capacity) || 6);
+    const set = new Set([...fillPainted].filter(i => i < total));
+    if (set.size > v) {
+      [...set].sort((a, b) => b - a).forEach(i => { if (set.size > v) set.delete(i); });
+    } else {
+      for (let i = 0; i < total && set.size < v; i++) if (!set.has(i)) set.add(i);
+    }
+    setFill(fillCtx.fid, fillCtx.bi, o.s, o.start, v);
+    setFillCells(fillCtx.fid, fillCtx.bi, o.s, o.start, set.size ? [...set] : null);
+  }
+  save();
+}
+
+function highlightFillBlock(s, start) {
+  document.querySelectorAll('#ceBody .mslot.editing').forEach(e => e.classList.remove('editing'));
+  const el = document.querySelector(`#ceBody .mslot[data-bay="${fillCtx.bi}"][data-shelf="${s}"][data-start="${start}"]`);
+  if (el) el.classList.add('editing');
+}
+
+function closeFillPopup() {
+  commitCurrentFill();
+  document.getElementById('fillOverlay').classList.remove('open');
+  document.getElementById('fillPopup').classList.remove('open');
+  document.querySelectorAll('#ceBody .mslot.editing').forEach(e => e.classList.remove('editing'));
+  const fid = fillCtx && fillCtx.fid;
+  fillCtx = null;
+  const f = state.fridges.find(x => x.id === fid);
+  if (f) renderDetailBody(f);
+  renderGrid();   // reflect new fill totals on the record-tab card
+}
+
+// move the carousel to bay index i (clamped); animate unless told otherwise
+function goToBay(i, animate = true) {
+  const f = state.fridges.find(x => x.id === detailFridge);
+  if (!f) return;
+  const track = document.querySelector('#ceBody .pager-track');
+  if (!track) return;
+  currentBay = Math.max(0, Math.min(i, f.bays.length - 1));
+  if (!animate) track.classList.add('no-anim');
+  track.style.transform = `translateX(-${currentBay * 100}%)`;
+  if (!animate) { void track.offsetWidth; track.classList.remove('no-anim'); }
+  // sync dots + nav disabled state
+  document.querySelectorAll('#ceBody .pager-dot').forEach((d, di) => d.classList.toggle('on', di === currentBay));
+  const prev = document.querySelector('#ceBody .pager-nav.prev');
+  const next = document.querySelector('#ceBody .pager-nav.next');
+  if (prev) prev.disabled = currentBay === 0;
+  if (next) next.disabled = currentBay === f.bays.length - 1;
+}
+
+// merge consecutive slots holding the same drink into runs {did, span}
+function mergeRuns(row) {
+  const runs = [];
+  for (let c = 0; c < SLOTS_PER_SHELF; c++) {
+    // normalize: unknown/deleted drink ids count as empty
+    const raw = row[c];
+    const did = state.drinks.some(d => d.id === raw) ? raw : null;
+    const last = runs[runs.length - 1];
+    if (last && last.did === did) last.span++;
+    else runs.push({ did, span: 1 });
+  }
+  return runs;
+}
+
+function slotHtml(bi, s, c, did) {
+  const d = did ? state.drinks.find(x => x.id === did) : null;
+  const attrs = `data-bay="${bi}" data-shelf="${s}" data-slot="${c}"`;
+  if (!d) return `<div class="slot empty" ${attrs}></div>`;
+  return `<div class="slot" ${attrs} style="background:${drinkColor(did)}">${escHtml(d.name.slice(0,2))}</div>`;
+}
+
+function refreshSlot(slotEl, f) {
+  const bi = +slotEl.dataset.bay, s = +slotEl.dataset.shelf, c = +slotEl.dataset.slot;
+  const did = f.bays[bi][s][c];
+  const d = did ? state.drinks.find(x => x.id === did) : null;
+  if (!d) {
+    slotEl.className = 'slot empty';
+    slotEl.style.background = '';
+    slotEl.textContent = '';
+  } else {
+    slotEl.className = 'slot';
+    slotEl.style.background = drinkColor(did);
+    slotEl.textContent = d.name.slice(0, 2);
+  }
+}
+
+function wireDetail(body, f) {
+  const editor = body.querySelector('.layout-editor');
+  if (!editor) return;
+  const pager = body.querySelector('.pager');
+  const track = body.querySelector('.pager-track');
+
+  // ── palette: select a drink (or eraser) to paint with ──
+  const picks = editor.querySelectorAll('.drink-pick');
+  picks.forEach(btn => {
+    btn.addEventListener('click', () => {
+      selectedDrink = btn.dataset.erase ? 'ERASE' : btn.dataset.did;
+      picks.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  // ── nav controls ──
+  body.querySelector('.pager-nav.prev')?.addEventListener('click', () => goToBay(currentBay - 1));
+  body.querySelector('.pager-nav.next')?.addEventListener('click', () => goToBay(currentBay + 1));
+  body.querySelectorAll('.pager-dot').forEach(d =>
+    d.addEventListener('click', () => goToBay(+d.dataset.i)));
+
+  // ── add a bay → re-render, then slide to the new last bay ──
+  body.querySelector('.bay-add')?.addEventListener('click', () => {
+    f.bays.push(emptyBay());
+    save();
+    renderDetailBody(f);                 // rebuilt at the same currentBay (old position)
+    setTimeout(() => goToBay(f.bays.length - 1), 30);  // animate to the new bay
+  });
+
+  // ── remove the current bay ──
+  body.querySelector('.bay-remove')?.addEventListener('click', () => {
+    if (f.bays.length <= 1) return;
+    if (!confirm('현재 칸을 제거할까요? 안의 배치도 함께 삭제됩니다.')) return;
+    f.bays.splice(currentBay, 1);
+    if (currentBay >= f.bays.length) currentBay = f.bays.length - 1;
+    save();
+    renderDetailBody(f);
+  });
+
+  // ── painting helpers ──
+  const applyPaint = slotEl => {
+    if (selectedDrink === null) return;
+    const bi = +slotEl.dataset.bay, s = +slotEl.dataset.shelf, c = +slotEl.dataset.slot;
+    f.bays[bi][s][c] = (selectedDrink === 'ERASE') ? null : selectedDrink;
+    save();
+    refreshSlot(slotEl, f);
+  };
+  const slotFromPoint = (x, y) => {
+    const el = document.elementFromPoint(x, y);
+    return el && el.classList.contains('slot') ? el : null;
+  };
+
+  // ── unified gesture: horizontal drag = swipe between bays, otherwise paint ──
+  let active = false, decided = false, mode = null, x0 = 0, y0 = 0, startSlot = null, startBlock = null;
+
+  pager.addEventListener('pointerdown', e => {
+    active = true; decided = false; mode = null;
+    x0 = e.clientX; y0 = e.clientY;
+    startSlot = editMode ? e.target.closest('.slot') : null;
+    startBlock = editMode ? null : e.target.closest('.mslot');
+    try { pager.setPointerCapture(e.pointerId); } catch {}
+  });
+
+  pager.addEventListener('pointermove', e => {
+    if (!active) return;
+    const dx = e.clientX - x0, dy = e.clientY - y0;
+    if (!decided) {
+      // swipe-to-adjacent-bay only in view mode; in edit mode drags always paint
+      if (!editMode && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) + 4 && f.bays.length > 1) {
+        mode = 'swipe'; decided = true; track.classList.add('no-anim');
+      } else if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+        mode = 'paint'; decided = true;
+        if (editMode && startSlot) {
+          if (selectedDrink === null) showToast('먼저 주류를 선택하세요');
+          else applyPaint(startSlot);
+        }
+      } else return;
+    }
+    if (mode === 'swipe') {
+      const pct = dx / pager.offsetWidth * 100;
+      track.style.transform = `translateX(calc(-${currentBay * 100}% + ${pct}%))`;
+      e.preventDefault();
+    } else if (mode === 'paint') {
+      const slot = slotFromPoint(e.clientX, e.clientY);
+      if (slot) applyPaint(slot);
+      e.preventDefault();
+    }
+  });
+
+  const finish = e => {
+    if (!active) return;
+    active = false;
+    const dx = (e.clientX ?? x0) - x0;
+    if (mode === 'swipe') {
+      track.classList.remove('no-anim');
+      const threshold = pager.offsetWidth * 0.2;
+      if (dx <= -threshold) goToBay(currentBay + 1);
+      else if (dx >= threshold) goToBay(currentBay - 1);
+      else goToBay(currentBay);            // snap back
+    } else if (!decided && editMode && startSlot) {
+      // a tap on a slot → paint
+      if (selectedDrink === null) showToast('먼저 주류를 선택하세요');
+      else applyPaint(startSlot);
+    } else if (!decided && !editMode && startBlock && !startBlock.classList.contains('empty')) {
+      // a tap on a filled block → enter fill count
+      openFillPopup(startBlock);
+    }
+    mode = null; decided = false; startSlot = null; startBlock = null;
+  };
+  pager.addEventListener('pointerup', finish);
+  pager.addEventListener('pointercancel', finish);
+}
+
+function openDetail(fid, cardEl) {
+  const f = state.fridges.find(x => x.id === fid);
+  if (!f) return;
+  detailFridge = fid;
+  currentBay = 0;
+
+  const expand = document.getElementById('cardExpand');
+  const overlay = document.getElementById('expandOverlay');
+  document.getElementById('ceTitle').textContent = f.name;
+  renderDetailBody(f);
+
+  // start at the tapped card's exact position/size (no transition for this frame)
+  const r = cardEl.getBoundingClientRect();
+  expand.style.transition = 'none';
+  expand.style.display = 'flex';
+  expand.style.top = r.top + 'px';
+  expand.style.left = r.left + 'px';
+  expand.style.width = r.width + 'px';
+  expand.style.height = r.height + 'px';
+  expand.style.borderRadius = getComputedStyle(cardEl).borderRadius;
+
+  // force reflow so the start frame is committed before we change to the target
+  void expand.offsetWidth;
+
+  // expanded target: near-fullscreen, centered, capped at 640px wide.
+  // Set synchronously so the final state is always correct (the CSS transition
+  // animates between start and target on devices that render frames).
+  const margin = 14;
+  const maxW = 640;
+  const w = Math.min(window.innerWidth - margin * 2, maxW);
+  const left = (window.innerWidth - w) / 2;
+
+  expand.style.transition = '';
+  overlay.classList.add('open');
+  expand.style.top = margin + 'px';
+  expand.style.left = left + 'px';
+  expand.style.width = w + 'px';
+  expand.style.height = (window.innerHeight - margin * 2) + 'px';
+  expand.style.borderRadius = '16px';
+}
+
+function closeDetail() {
+  const expand = document.getElementById('cardExpand');
+  const overlay = document.getElementById('expandOverlay');
+  if (!detailFridge) return;
+
+  // animate back toward the originating card if it still exists
+  const cardEl = document.querySelector(`.fridge-card[data-fridge-id="${detailFridge}"]`);
+  overlay.classList.remove('open');
+
+  if (cardEl) {
+    const r = cardEl.getBoundingClientRect();
+    expand.style.top = r.top + 'px';
+    expand.style.left = r.left + 'px';
+    expand.style.width = r.width + 'px';
+    expand.style.height = r.height + 'px';
+    expand.style.borderRadius = getComputedStyle(cardEl).borderRadius;
+  } else {
+    expand.style.opacity = '0';
+  }
+
+  const done = () => {
+    expand.style.display = 'none';
+    expand.style.opacity = '';
+    expand.removeEventListener('transitionend', done);
+    detailFridge = null;
+    renderGrid();   // reflect any fill changes on the card
+  };
+  expand.addEventListener('transitionend', done);
+  // fallback in case transitionend doesn't fire
+  setTimeout(done, 360);
+}
+
+// ════════════════════════════════════════
+// SHEET (fridge detail)
+// ════════════════════════════════════════
+function openSheet(fid) {
+  const f = state.fridges.find(x => x.id === fid);
+  if (!f) return;
+  activeSheetFridge = fid;
+
+  document.getElementById('sheetTitle').textContent = f.name;
+  renderSheet();
+
+  document.getElementById('sheetOverlay').classList.add('open');
+  document.getElementById('sheet').classList.add('open');
+}
+
+function closeSheet() {
+  document.getElementById('sheetOverlay').classList.remove('open');
+  document.getElementById('sheet').classList.remove('open');
+  activeSheetFridge = null;
+  renderGrid();
+}
+
+function renderSheet() {
+  const fid = activeSheetFridge;
+  const body = document.getElementById('sheetBody');
+  const total = fridgeTotal(fid);
+  document.getElementById('sheetTotal').textContent = total + '개';
+
+  if (state.drinks.length === 0) {
+    body.innerHTML = `<div class="sheet-empty">등록된 음료가 없습니다.<br>⚙️ 설정에서 음료를 추가해주세요.</div>`;
+    return;
+  }
+
+  body.innerHTML = '';
+  state.drinks.forEach(d => {
+    const cnt = getCount(fid, d.id);
+    const row = document.createElement('div');
+    row.className = 'sheet-drink-row';
+    row.innerHTML = `
+      <span class="sheet-drink-name">${escHtml(d.name)}</span>
+      <div class="counter">
+        <button class="cnt-btn minus" data-fid="${fid}" data-did="${d.id}" data-delta="-1">−</button>
+        <input class="cnt-input" type="number" min="0" value="${cnt}"
+          data-fid="${fid}" data-did="${d.id}" />
+        <button class="cnt-btn" data-fid="${fid}" data-did="${d.id}" data-delta="1">+</button>
+      </div>
+    `;
+    body.appendChild(row);
+  });
+
+  // event delegation
+  body.querySelectorAll('.cnt-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const fid = btn.dataset.fid, did = btn.dataset.did;
+      const delta = parseInt(btn.dataset.delta);
+      setCount(fid, did, getCount(fid, did) + delta);
+      refreshSheetRow(fid, did);
+    });
+  });
+  body.querySelectorAll('.cnt-input').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const v = parseInt(inp.value, 10);
+      setCount(inp.dataset.fid, inp.dataset.did, isNaN(v) ? 0 : v);
+      refreshSheetTotal();
+    });
+  });
+}
+
+function refreshSheetRow(fid, did) {
+  const cnt = getCount(fid, did);
+  const inp = document.querySelector(`.cnt-input[data-fid="${fid}"][data-did="${did}"]`);
+  if (inp) inp.value = cnt;
+  refreshSheetTotal();
+}
+
+function refreshSheetTotal() {
+  const fid = activeSheetFridge;
+  if (!fid) return;
+  document.getElementById('sheetTotal').textContent = fridgeTotal(fid) + '개';
+}
+
+// ════════════════════════════════════════
+// DRAG & DROP (long press)
+// ════════════════════════════════════════
+let dragState = null;
+const LONG_PRESS_MS = 400;
+
+function setupDrag(card, fid) {
+  let pressTimer = null;
+
+  function startPress(clientX, clientY) {
+    pressTimer = setTimeout(() => {
+      beginDrag(card, clientX, clientY);
+    }, LONG_PRESS_MS);
+  }
+  function cancelPress() { clearTimeout(pressTimer); pressTimer = null; }
+
+  card.addEventListener('touchstart', e => {
+    const t = e.touches[0];
+    startPress(t.clientX, t.clientY);
+  }, { passive: true });
+  card.addEventListener('touchend', cancelPress);
+  card.addEventListener('touchmove', cancelPress, { passive: true });
+
+  // mouse fallback
+  card.addEventListener('mousedown', e => startPress(e.clientX, e.clientY));
+  card.addEventListener('mouseup', cancelPress);
+  card.addEventListener('mousemove', cancelPress);
+}
+
+function beginDrag(card, startX, startY) {
+  const rect = card.getBoundingClientRect();
+  const ghost = document.getElementById('dragGhost');
+
+  // build ghost
+  ghost.style.display = 'block';
+  ghost.style.width = rect.width + 'px';
+  ghost.style.height = rect.height + 'px';
+  ghost.style.left = rect.left + 'px';
+  ghost.style.top = rect.top + 'px';
+  ghost.innerHTML = card.innerHTML;
+  ghost.style.background = '#fff';
+  ghost.style.border = '2px solid ' + getComputedStyle(document.documentElement).getPropertyValue('--primary');
+
+  card.classList.add('dragging');
+
+  dragState = {
+    card,
+    fid: card.dataset.fridgeId,
+    offsetX: startX - rect.left,
+    offsetY: startY - rect.top,
+  };
+
+  const onMove = e => {
+    const cx = e.touches ? e.touches[0].clientX : e.clientX;
+    const cy = e.touches ? e.touches[0].clientY : e.clientY;
+    ghost.style.left = (cx - dragState.offsetX) + 'px';
+    ghost.style.top = (cy - dragState.offsetY) + 'px';
+
+    // find target card
+    ghost.style.display = 'none';
+    const el = document.elementFromPoint(cx, cy);
+    ghost.style.display = 'block';
+    const target = el?.closest('.fridge-card');
+
+    document.querySelectorAll('.fridge-card').forEach(c => c.classList.remove('drag-over'));
+    if (target && target !== card) target.classList.add('drag-over');
+  };
+
+  const onEnd = e => {
+    const cx = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+    const cy = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+
+    ghost.style.display = 'none';
+    const el = document.elementFromPoint(cx, cy);
+    ghost.style.display = 'none';
+    const target = el?.closest('.fridge-card');
+
+    if (target && target !== card) {
+      const fromIdx = state.fridges.findIndex(f => f.id === dragState.fid);
+      const toIdx = state.fridges.findIndex(f => f.id === target.dataset.fridgeId);
+      if (fromIdx !== -1 && toIdx !== -1) {
+        const [item] = state.fridges.splice(fromIdx, 1);
+        state.fridges.splice(toIdx, 0, item);
+        save();
+      }
+    }
+
+    card.classList.remove('dragging');
+    document.querySelectorAll('.fridge-card').forEach(c => c.classList.remove('drag-over'));
+    dragState = null;
+    renderGrid();
+
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend', onEnd);
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onEnd);
+  };
+
+  document.addEventListener('touchmove', onMove, { passive: true });
+  document.addEventListener('touchend', onEnd);
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onEnd);
+}
+
+// ════════════════════════════════════════
+// SUMMARY
+// ════════════════════════════════════════
+function renderSummary() {
+  let grand = 0;
+  const drinkTotals = {};                 // did -> total entered fills
+  const fridgeTotals = {};                // fid -> total entered fills
+  state.drinks.forEach(d => drinkTotals[d.id] = 0);
+
+  state.fridges.forEach(f => {
+    const fills = fridgeFillByDrink(f);
+    let fTotal = 0;
+    Object.keys(fills).forEach(did => {
+      const v = fills[did];
+      if (drinkTotals[did] === undefined) drinkTotals[did] = 0;
+      drinkTotals[did] += v;
+      fTotal += v;
+      grand += v;
+    });
+    fridgeTotals[f.id] = fTotal;
+  });
+
+  document.getElementById('grandTotal').textContent = grand;
+
+  // only drinks that actually need filling (>0)
+  const drinkRows = state.drinks.filter(d => drinkTotals[d.id] > 0);
+  const t1 = document.getElementById('sumByDrink');
+  t1.innerHTML = drinkRows.length
+    ? drinkRows.map(d => `<tr><td>${escHtml(d.name)}</td><td class="num-cell">${drinkTotals[d.id]}</td></tr>`).join('')
+    : `<tr><td colspan="2" style="text-align:center;color:var(--muted);padding:16px">채울 주류 없음</td></tr>`;
+
+  const t2 = document.getElementById('sumByFridge');
+  t2.innerHTML = state.fridges.length
+    ? state.fridges.map(f => `<tr><td>${escHtml(f.name)}</td><td class="num-cell">${fridgeTotals[f.id] || 0}</td></tr>`).join('')
+    : `<tr><td colspan="2" style="text-align:center;color:var(--muted);padding:16px">냉장고 없음</td></tr>`;
+}
+
+// ════════════════════════════════════════
+// SETTINGS DRAWER
+// ════════════════════════════════════════
+function openSettings() {
+  renderSettingsDrawer();
+  updateEditModeBtn();
+  updateHideAddBtn();
+  document.getElementById('drawerOverlay').classList.add('open');
+  document.getElementById('drawer').classList.add('open');
+}
+
+function toggleHideAddCard() {
+  hideAddCard = !hideAddCard;
+  updateHideAddBtn();
+  renderGrid();
+  showToast(hideAddCard ? '냉장고 추가 숨김' : '냉장고 추가 표시');
+}
+
+function updateHideAddBtn() {
+  const btn = document.getElementById('hideAddBtn');
+  if (!btn) return;
+  if (hideAddCard) {
+    btn.textContent = '냉장고 추가 표시하기';
+    btn.className = 'btn btn-primary';
+  } else {
+    btn.textContent = '냉장고 추가 숨기기';
+    btn.className = 'btn';
+  }
+  btn.style.width = '100%';
+  btn.style.marginTop = '10px';
+}
+
+function toggleEditMode() {
+  editMode = !editMode;
+  updateEditModeBtn();
+  renderGrid();
+  showToast(editMode ? '수정 모드 켜짐' : '수정 모드 꺼짐');
+}
+
+function updateEditModeBtn() {
+  const btn = document.getElementById('editModeBtn');
+  if (!btn) return;
+  if (editMode) {
+    btn.textContent = '수정 모드 끄기';
+    btn.className = 'btn btn-primary';
+  } else {
+    btn.textContent = '수정 모드';
+    btn.className = 'btn';
+  }
+  btn.style.width = '100%';
+}
+function closeSettings() {
+  document.getElementById('drawerOverlay').classList.remove('open');
+  document.getElementById('drawer').classList.remove('open');
+}
+
+function renderSettingsDrawer() {
+  const fl = document.getElementById('fridgeSettingList');
+  fl.innerHTML = state.fridges.length
+    ? state.fridges.map(f => `
+        <div class="item-row">
+          <span>${escHtml(f.name)}</span>
+          <button class="del-btn" onclick="deleteFridge('${f.id}')">✕</button>
+        </div>`).join('')
+    : `<div class="empty-list">냉장고가 없습니다</div>`;
+
+  // drinks grouped by category
+  const cont = document.getElementById('drinkCategories');
+  cont.innerHTML = DRINK_CATS.map(cat => {
+    const items = state.drinks.filter(d => (d.category || 'etc') === cat.key);
+    const list = items.length
+      ? items.map(d => `
+          <div class="item-row" data-did="${d.id}">
+            <span class="row-stripe" style="background:${drinkColor(d.id)}"></span>
+            <span>${escHtml(d.name)}${cat.key === 'etc' ? ` (${d.capacity})` : ''}</span>
+            <button class="del-btn" onclick="deleteDrink('${d.id}')">✕</button>
+          </div>`).join('')
+      : `<div class="empty-list">없음</div>`;
+    const toggle = cat.key === 'etc'
+      ? `<button type="button" class="cap-toggle" id="etcCapToggle" onclick="toggleEtcCap()">${etcCap}</button>`
+      : '';
+    return `<div class="cat-group">
+      <h4>${cat.label}${cat.cap !== null ? ` (${cat.cap})` : ''}</h4>
+      <div class="item-list">${list}</div>
+      <div class="add-row">
+        <input id="newDrink_${cat.key}" type="text" placeholder="${cat.label} 이름" maxlength="30" />
+        ${toggle}
+        <button class="btn btn-primary btn-sm" onclick="addDrinkCat('${cat.key}')">추가</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  // wire Enter key on each category input + long-press color picker
+  DRINK_CATS.forEach(cat => {
+    const inp = document.getElementById('newDrink_' + cat.key);
+    if (inp) inp.addEventListener('keydown', e => { if (e.key === 'Enter') addDrinkCat(cat.key); });
+  });
+  wireDrinkRows();
+}
+
+function toggleEtcCap() {
+  etcCap = etcCap === 6 ? 5 : 6;
+  const b = document.getElementById('etcCapToggle');
+  if (b) b.textContent = etcCap;
+}
+
+function addDrinkCat(key) {
+  const cat = DRINK_CATS.find(c => c.key === key);
+  const inp = document.getElementById('newDrink_' + key);
+  const name = inp.value.trim();
+  if (!name) return;
+  const capacity = cat.cap !== null ? cat.cap : etcCap;
+  const color = SLOT_COLORS[state.drinks.length % SLOT_COLORS.length];
+  state.drinks.push({ id: uid(), name, category: key, capacity, color });
+  save();
+  inp.value = '';
+  renderSettingsDrawer();
+  renderGrid();
+  refreshOpenDetail();
+  showToast(`"${name}" 추가됨`);
+}
+
+// re-render the expanded detail editor if one is open (e.g. after drinks change)
+function refreshOpenDetail() {
+  if (!detailFridge) return;
+  const f = state.fridges.find(x => x.id === detailFridge);
+  if (f) renderDetailBody(f);
+}
+
+// ── Long-press a drink row to change its color ──
+function wireDrinkRows() {
+  document.querySelectorAll('#drinkCategories .item-row[data-did]').forEach(row => {
+    const did = row.dataset.did;
+    let timer = null;
+    const start = () => {
+      row.classList.add('long-pressing');
+      timer = setTimeout(() => { row.classList.remove('long-pressing'); openColorPicker(did); }, 450);
+    };
+    const cancel = () => { clearTimeout(timer); row.classList.remove('long-pressing'); };
+    row.addEventListener('touchstart', start, { passive: true });
+    row.addEventListener('touchend', cancel);
+    row.addEventListener('touchmove', cancel, { passive: true });
+    row.addEventListener('mousedown', start);
+    row.addEventListener('mouseup', cancel);
+    row.addEventListener('mouseleave', cancel);
+  });
+}
+
+function openColorPicker(did) {
+  const d = state.drinks.find(x => x.id === did);
+  if (!d) return;
+  cpDrinkId = did;
+  const popup = document.getElementById('cpPopup');
+  const swatches = SLOT_COLORS.map(col =>
+    `<button class="cp-swatch ${d.color === col ? 'sel' : ''}" style="background:${col}" data-col="${col}"></button>`
+  ).join('');
+  popup.innerHTML = `<div class="cp-title">${escHtml(d.name)} 색상 선택</div><div class="cp-grid">${swatches}</div>`;
+  popup.querySelectorAll('.cp-swatch').forEach(sw => {
+    sw.addEventListener('click', () => {
+      d.color = sw.dataset.col;
+      save();
+      closeColorPicker();
+      renderSettingsDrawer();
+      renderGrid();
+      refreshOpenDetail();
+    });
+  });
+  document.getElementById('cpOverlay').classList.add('open');
+  popup.classList.add('open');
+}
+
+function closeColorPicker() {
+  document.getElementById('cpOverlay').classList.remove('open');
+  document.getElementById('cpPopup').classList.remove('open');
+  cpDrinkId = null;
+}
+
+// "+" 카드 탭 → 그 자리에 바로 냉장고 카드 생성, 추가 버튼은 옆으로 밀림
+function quickAddFridge() {
+  const name = `${state.fridges.length + 1}번 냉장고`;
+  const f = { id: uid(), name };
+  state.fridges.push(f);
+  save();
+  renderGrid();
+  renderSettingsDrawer();
+  showToast(`"${name}" 추가됨`);
+}
+
+function addFridge() {
+  const inp = document.getElementById('newFridgeName');
+  const name = inp.value.trim();
+  if (!name) return;
+  state.fridges.push({ id: uid(), name });
+  save();
+  inp.value = '';
+  renderSettingsDrawer();
+  renderGrid();
+  showToast(`"${name}" 추가됨`);
+}
+
+function deleteFridge(id) {
+  if (!confirm('냉장고와 해당 기록을 모두 삭제할까요?')) return;
+  state.fridges = state.fridges.filter(f => f.id !== id);
+  Object.keys(state.records).forEach(day => { delete state.records[day]?.[id]; });
+  save();
+  renderSettingsDrawer();
+  renderGrid();
+  renderSummary();
+}
+
+function deleteDrink(id) {
+  if (!confirm('주류와 해당 기록을 모두 삭제할까요?')) return;
+  state.drinks = state.drinks.filter(d => d.id !== id);
+  // clear it from any fridge layouts too
+  state.fridges.forEach(f => {
+    if (Array.isArray(f.bays)) {
+      f.bays.forEach(bay => bay.forEach(row => row.forEach((v, i) => { if (v === id) row[i] = null; })));
+    } else if (Array.isArray(f.layout)) {
+      f.layout.forEach(row => row.forEach((v, i) => { if (v === id) row[i] = null; }));
+    }
+  });
+  Object.keys(state.records).forEach(day => {
+    Object.values(state.records[day] || {}).forEach(fridge => { delete fridge[id]; });
+  });
+  save();
+  renderSettingsDrawer();
+  renderGrid();
+  refreshOpenDetail();
+  renderSummary();
+}
+
+function resetToday() {
+  if (!confirm('오늘 기록을 모두 초기화할까요?')) return;
+  delete state.records[todayKey()];
+  save();
+  renderGrid();
+  renderSummary();
+  if (activeSheetFridge) renderSheet();
+  showToast('오늘 기록이 초기화되었습니다');
+}
+
+// ── Enter key on inputs ────────────────
+document.getElementById('newFridgeName').addEventListener('keydown', e => { if (e.key === 'Enter') addFridge(); });
+
+// ════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════
+renderGrid();
+
+// register service worker for offline use / installability (PWA)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>

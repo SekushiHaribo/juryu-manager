@@ -1,0 +1,7 @@
+# local dev only — not needed for deployment
+.claude/
+serve.ps1
+
+# OS / editor noise
+.DS_Store
+Thumbs.db

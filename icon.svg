@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#2563eb"/>
+  <!-- bottle -->
+  <g fill="#ffffff">
+    <rect x="226" y="96" width="60" height="52" rx="10"/>
+    <path d="M222 150 q-26 28 -26 70 v150 q0 30 30 30 h60 q30 0 30 -30 v-150 q0 -42 -26 -70 z"/>
+  </g>
+  <!-- liquid level -->
+  <path d="M200 250 q56 -16 112 0 v114 q0 18 -18 18 h-76 q-18 0 -18 -18 z" fill="#93c5fd"/>
+</svg>
