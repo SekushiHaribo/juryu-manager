@@ -2469,14 +2469,43 @@ function closeColorPicker() {
 // ════════════════════════════════════════
 // SHARE — export / import settings as a code
 // ════════════════════════════════════════
+const SHARE_B36 = '0123456789abcdefghijklmnopqrstuvwxyz';
+
+// encode one bay (5×8) as a 40-char string: drink index (base36) or '.' for empty
+function bayToStr(bay, idMap) {
+  let s = '';
+  for (let sh = 0; sh < SHELVES; sh++) {
+    for (let c = 0; c < SLOTS_PER_SHELF; c++) {
+      const did = bay[sh] ? bay[sh][c] : null;
+      s += (did != null && idMap[did] != null && idMap[did] < 36) ? SHARE_B36[idMap[did]] : '.';
+    }
+  }
+  return s;
+}
+function strToBay(s, idByIndex) {
+  const bay = Array.from({ length: SHELVES }, () => Array(SLOTS_PER_SHELF).fill(null));
+  for (let i = 0; i < SHELVES * SLOTS_PER_SHELF && i < (s || '').length; i++) {
+    const ch = s[i];
+    if (ch && ch !== '.') {
+      const idx = SHARE_B36.indexOf(ch);
+      if (idx >= 0 && idByIndex[idx]) bay[Math.floor(i / SLOTS_PER_SHELF)][i % SLOTS_PER_SHELF] = idByIndex[idx];
+    }
+  }
+  return bay;
+}
+
 function makeShareCode() {
-  const payload = {
-    v: 1,
-    drinks: state.drinks,
-    fridges: state.fridges.map(f => { ensureBays(f); return { id: f.id, name: f.name, bays: f.bays }; })
-  };
-  // base64 of UTF-8 JSON (handles Korean)
-  return btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+  // compact format v2: drinks referenced by index, bays as 40-char strings
+  const idMap = {};
+  state.drinks.forEach((d, i) => idMap[d.id] = i);
+  const d = state.drinks.map(dr => {
+    const ci = Math.max(0, DRINK_CATS.findIndex(c => c.key === (dr.category || 'etc')));
+    let color = dr.color || null;
+    if (color) { const pi = SLOT_COLORS.indexOf(color); if (pi >= 0) color = pi; }  // palette → index
+    return [dr.name, ci, dr.capacity || 6, color];
+  });
+  const f = state.fridges.map(fr => { ensureBays(fr); return [fr.name, fr.bays.map(b => bayToStr(b, idMap))]; });
+  return btoa(unescape(encodeURIComponent(JSON.stringify({ v: 2, d, f }))));
 }
 
 function openExport() {
@@ -2527,24 +2556,51 @@ function applyImport(code) {
     alert('코드를 읽을 수 없습니다. 코드를 다시 확인해 주세요.');
     return;
   }
-  if (!obj || !Array.isArray(obj.drinks) || !Array.isArray(obj.fridges)) {
+  const isV2 = obj && obj.v === 2 && Array.isArray(obj.d) && Array.isArray(obj.f);
+  const isV1 = obj && Array.isArray(obj.drinks) && Array.isArray(obj.fridges);
+  if (!isV2 && !isV1) {
     alert('코드 형식이 올바르지 않습니다.');
     return;
   }
   if (!confirm('현재 냉장고·주류 설정을 가져온 코드로 덮어쓸까요?\n(오늘 입력한 개수는 초기화됩니다)')) return;
 
-  state.drinks = obj.drinks.map(d => ({
-    id: d.id || uid(),
-    name: d.name || '주류',
-    category: d.category || 'etc',
-    capacity: d.capacity || 6,
-    color: d.color || null
-  }));
-  state.fridges = obj.fridges.map(f => {
-    const nf = { id: f.id || uid(), name: f.name || '냉장고', bays: f.bays };
-    ensureBays(nf);
-    return nf;
-  });
+  if (isV2) {
+    // compact format
+    state.drinks = obj.d.map(a => {
+      const colorRef = a[3];
+      let color = null;
+      if (typeof colorRef === 'number') color = SLOT_COLORS[colorRef] || null;
+      else if (typeof colorRef === 'string') color = colorRef;
+      return {
+        id: uid(),
+        name: a[0] || '주류',
+        category: (DRINK_CATS[a[1]] ? DRINK_CATS[a[1]].key : 'etc'),
+        capacity: a[2] || 6,
+        color
+      };
+    });
+    const idByIndex = state.drinks.map(d => d.id);
+    state.fridges = obj.f.map(a => {
+      const bays = (Array.isArray(a[1]) ? a[1] : ['']).map(s => strToBay(s, idByIndex));
+      const nf = { id: uid(), name: a[0] || '냉장고', bays };
+      ensureBays(nf);
+      return nf;
+    });
+  } else {
+    // legacy verbose format
+    state.drinks = obj.drinks.map(d => ({
+      id: d.id || uid(),
+      name: d.name || '주류',
+      category: d.category || 'etc',
+      capacity: d.capacity || 6,
+      color: d.color || null
+    }));
+    state.fridges = obj.fridges.map(f => {
+      const nf = { id: f.id || uid(), name: f.name || '냉장고', bays: f.bays };
+      ensureBays(nf);
+      return nf;
+    });
+  }
   // entered counts no longer match the new layout/ids → clear them
   state.fills = {}; state.fillCells = {}; state.records = {};
   save();
