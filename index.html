@@ -2457,6 +2457,31 @@ document.getElementById('newFridgeName').addEventListener('keydown', e => { if (
 // ════════════════════════════════════════
 renderGrid();
 
+// ── Swipe left/right on the main area to switch between 기록 / 합계 tabs ──
+(function setupTabSwipe() {
+  const main = document.querySelector('main');
+  if (!main) return;
+  const TH = 60;                 // min horizontal distance to count as a swipe
+  let x0 = null, y0 = null, active = false;
+  const curTab = () => document.getElementById('page-summary').classList.contains('active') ? 'summary' : 'record';
+
+  main.addEventListener('touchstart', e => {
+    if (e.touches.length !== 1) { active = false; return; }
+    x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; active = true;
+  }, { passive: true });
+
+  main.addEventListener('touchend', e => {
+    if (!active || x0 === null) return;
+    active = false;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - x0, dy = t.clientY - y0;
+    if (Math.abs(dx) < TH || Math.abs(dx) < Math.abs(dy) * 1.5) return;  // not a clear horizontal swipe
+    const tab = curTab();
+    if (dx < 0 && tab === 'record') showPage('summary');       // swipe left → next tab
+    else if (dx > 0 && tab === 'summary') showPage('record');  // swipe right → previous tab
+  });
+})();
+
 // register service worker for offline use / installability (PWA)
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
