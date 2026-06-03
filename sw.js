@@ -1,6 +1,7 @@
-// Simple offline-first service worker for the 주류 관리 PWA.
-// Bump CACHE when you change index.html so clients pick up the new version.
-const CACHE = 'juryu-v10';
+// Service worker for the 주류 매니저 PWA.
+// Strategy: network-first for the HTML document (so each online launch gets the
+// latest version), cache-first for other assets. Falls back to cache offline.
+const CACHE = 'juryu-v11';
 const ASSETS = [
   './',
   './index.html',
@@ -21,11 +22,26 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+
+  const isDocument = e.request.mode === 'navigate' || e.request.destination === 'document';
+
+  if (isDocument) {
+    // network-first: always try to get the freshest HTML when online
+    e.respondWith(
+      fetch(e.request).then(res => {
+        const copy = res.clone();
+        caches.open(CACHE).then(c => c.put('./index.html', copy));
+        return res;
+      }).catch(() => caches.match(e.request).then(r => r || caches.match('./index.html')))
+    );
+    return;
+  }
+
+  // cache-first for everything else
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
       return fetch(e.request).then(res => {
-        // cache same-origin successful responses for offline use
         if (res.ok && new URL(e.request.url).origin === location.origin) {
           const copy = res.clone();
           caches.open(CACHE).then(c => c.put(e.request, copy));
