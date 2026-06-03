@@ -893,6 +893,20 @@
       font-size: 13px; color: var(--muted); font-weight: 600;
     }
     .cp-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+    .share-area {
+      width: 100%; height: 120px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      font-size: 12px;
+      font-family: monospace;
+      resize: none;
+      word-break: break-all;
+    }
+    .share-area:focus { outline: 2px solid var(--primary); border-color: transparent; }
+    .share-hint { font-size: 12px; color: var(--muted); margin: 6px 2px 10px; line-height: 1.5; }
+    .share-btns { display: flex; gap: 8px; margin-top: 12px; }
+    .share-btns .btn { flex: 1; }
     .cp-swatch {
       aspect-ratio: 1; border-radius: 50%;
       border: 3px solid transparent; cursor: pointer;
@@ -1119,6 +1133,16 @@
       <h3>주류 목록</h3>
       <div id="drinkCategories"></div>
     </div>
+    <div class="drawer-section">
+      <h3>공유</h3>
+      <div style="display:flex;gap:8px">
+        <button class="btn" id="exportBtn" style="flex:1;border:1px solid var(--primary);color:var(--primary);background:white" onclick="openExport()">코드 내보내기</button>
+        <button class="btn" id="importBtn" style="flex:1;border:1px solid var(--primary);color:var(--primary);background:white" onclick="openImport()">코드 가져오기</button>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin-top:6px;padding:0 2px;line-height:1.5">
+        냉장고·주류 목록·칸 배치를 코드로 내보내 다른 사람과 공유할 수 있습니다.
+      </p>
+    </div>
     <div class="drawer-section reset-row">
       <h3>초기화</h3>
       <button class="btn btn-danger" style="width:100%" onclick="resetToday()">오늘 기록 초기화</button>
@@ -1133,6 +1157,10 @@
 <!-- ══ Fill-count input ══ -->
 <div class="cp-overlay" id="fillOverlay" onclick="closeFillPopup()"></div>
 <div class="cp-popup" id="fillPopup"></div>
+
+<!-- ══ Share (import/export code) ══ -->
+<div class="cp-overlay" id="shareOverlay" onclick="closeShare()"></div>
+<div class="cp-popup" id="sharePopup"></div>
 
 <!-- Drag ghost element -->
 <div id="dragGhost"></div>
@@ -2437,6 +2465,100 @@ function closeColorPicker() {
   cpDrinkId = null;
 }
 
+// ════════════════════════════════════════
+// SHARE — export / import settings as a code
+// ════════════════════════════════════════
+function makeShareCode() {
+  const payload = {
+    v: 1,
+    drinks: state.drinks,
+    fridges: state.fridges.map(f => { ensureBays(f); return { id: f.id, name: f.name, bays: f.bays }; })
+  };
+  // base64 of UTF-8 JSON (handles Korean)
+  return btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+}
+
+function openExport() {
+  const code = makeShareCode();
+  const popup = document.getElementById('sharePopup');
+  popup.innerHTML = `
+    <div class="cp-title">코드 내보내기</div>
+    <p class="share-hint">아래 코드를 복사해 전달하세요. 받는 사람은 '코드 가져오기'에 붙여넣으면 됩니다.</p>
+    <textarea class="share-area" id="shareOut" readonly>${escHtml(code)}</textarea>
+    <div class="share-btns">
+      <button class="btn btn-primary" id="shareCopy">복사</button>
+      <button class="btn" style="border:1px solid var(--border)" onclick="closeShare()">닫기</button>
+    </div>`;
+  popup.querySelector('#shareCopy').addEventListener('click', () => {
+    const ta = popup.querySelector('#shareOut');
+    ta.select(); ta.setSelectionRange(0, 99999);
+    const done = () => showToast('코드가 복사되었습니다');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(ta.value).then(done).catch(() => { document.execCommand('copy'); done(); });
+    } else { document.execCommand('copy'); done(); }
+  });
+  document.getElementById('shareOverlay').classList.add('open');
+  popup.classList.add('open');
+}
+
+function openImport() {
+  const popup = document.getElementById('sharePopup');
+  popup.innerHTML = `
+    <div class="cp-title">코드 가져오기</div>
+    <p class="share-hint">받은 코드를 붙여넣고 '가져오기'를 누르세요. 현재 냉장고·주류 설정을 덮어씁니다.</p>
+    <textarea class="share-area" id="shareIn" placeholder="여기에 코드 붙여넣기"></textarea>
+    <div class="share-btns">
+      <button class="btn btn-primary" id="shareDoImport">가져오기</button>
+      <button class="btn" style="border:1px solid var(--border)" onclick="closeShare()">닫기</button>
+    </div>`;
+  popup.querySelector('#shareDoImport').addEventListener('click', () => {
+    applyImport(popup.querySelector('#shareIn').value);
+  });
+  document.getElementById('shareOverlay').classList.add('open');
+  popup.classList.add('open');
+}
+
+function applyImport(code) {
+  let obj;
+  try {
+    obj = JSON.parse(decodeURIComponent(escape(atob((code || '').trim()))));
+  } catch (e) {
+    alert('코드를 읽을 수 없습니다. 코드를 다시 확인해 주세요.');
+    return;
+  }
+  if (!obj || !Array.isArray(obj.drinks) || !Array.isArray(obj.fridges)) {
+    alert('코드 형식이 올바르지 않습니다.');
+    return;
+  }
+  if (!confirm('현재 냉장고·주류 설정을 가져온 코드로 덮어쓸까요?\n(오늘 입력한 개수는 초기화됩니다)')) return;
+
+  state.drinks = obj.drinks.map(d => ({
+    id: d.id || uid(),
+    name: d.name || '주류',
+    category: d.category || 'etc',
+    capacity: d.capacity || 6,
+    color: d.color || null
+  }));
+  state.fridges = obj.fridges.map(f => {
+    const nf = { id: f.id || uid(), name: f.name || '냉장고', bays: f.bays };
+    ensureBays(nf);
+    return nf;
+  });
+  // entered counts no longer match the new layout/ids → clear them
+  state.fills = {}; state.fillCells = {}; state.records = {};
+  save();
+  renderSettingsDrawer();
+  renderGrid();
+  renderSummary();
+  closeShare();
+  showToast('가져오기 완료');
+}
+
+function closeShare() {
+  document.getElementById('shareOverlay').classList.remove('open');
+  document.getElementById('sharePopup').classList.remove('open');
+}
+
 // "+" 카드 탭 → 그 자리에 바로 냉장고 카드 생성, 추가 버튼은 옆으로 밀림
 function quickAddFridge() {
   const name = `${state.fridges.length + 1}번 냉장고`;
@@ -2531,7 +2653,16 @@ document.getElementById('newFridgeName').addEventListener('keydown', e => { if (
 // ════════════════════════════════════════
 renderGrid();
 
-// ── Swipe between 기록 / 합계 tabs with the track following the finger ──
+// is a full-screen overlay (detail / drawer / popup) currently open?
+function anyOverlayOpen() {
+  return detailFridge != null
+    || document.getElementById('drawer').classList.contains('open')
+    || document.getElementById('cpPopup').classList.contains('open')
+    || document.getElementById('fillPopup').classList.contains('open')
+    || (document.getElementById('sharePopup') && document.getElementById('sharePopup').classList.contains('open'));
+}
+
+// ── Swipe between 기록 / 합계 tabs anywhere on screen (track follows the finger) ──
 (function setupTabSwipe() {
   const main = document.querySelector('main');
   const track = document.getElementById('tabTrack');
@@ -2539,14 +2670,14 @@ renderGrid();
 
   let x0 = 0, y0 = 0, w = 0, started = false, decided = false, horizontal = false;
 
-  main.addEventListener('touchstart', e => {
-    if (e.touches.length !== 1 || dragState) { started = false; return; }  // ignore during card reorder
+  document.body.addEventListener('touchstart', e => {
+    if (e.touches.length !== 1 || dragState || anyOverlayOpen()) { started = false; return; }
     x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
-    w = main.clientWidth || 1;
+    w = main.clientWidth || window.innerWidth || 1;
     started = true; decided = false; horizontal = false;
   }, { passive: true });
 
-  main.addEventListener('touchmove', e => {
+  document.body.addEventListener('touchmove', e => {
     if (!started || dragState) return;
     const dx = e.touches[0].clientX - x0, dy = e.touches[0].clientY - y0;
     if (!decided) {
@@ -2562,7 +2693,7 @@ renderGrid();
     track.style.transform = `translateX(${pct}%)`;
   }, { passive: false });
 
-  main.addEventListener('touchend', e => {
+  document.body.addEventListener('touchend', e => {
     if (!started) return;
     started = false;
     track.classList.remove('no-anim');
