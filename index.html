@@ -977,12 +977,13 @@
       box-shadow: 0 1px 3px rgba(0,0,0,.3);
     }
 
-    .add-row { display: flex; gap: 8px; }
+    .add-row { display: flex; gap: 8px; align-items: stretch; }
     .add-row input {
-      flex: 1; padding: 10px 13px;
+      flex: 1; min-width: 0; padding: 10px 13px;
       border: 1px solid var(--border); border-radius: 10px;
       font-size: 14px;
     }
+    .add-row .btn { flex-shrink: 0; }
     .add-row input:focus { outline: 2px solid var(--primary); border-color: transparent; }
 
     /* ── Buttons ── */

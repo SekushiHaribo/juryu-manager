@@ -1,7 +1,7 @@
 // Service worker for the 주류 매니저 PWA.
 // Strategy: network-first for the HTML document (so each online launch gets the
 // latest version), cache-first for other assets. Falls back to cache offline.
-const CACHE = 'juryu-v14';
+const CACHE = 'juryu-v15';
 const ASSETS = [
   './',
   './index.html',
