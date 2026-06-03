@@ -113,9 +113,20 @@
     }
 
     /* ── Main ── */
-    main { padding: 14px; max-width: 640px; margin: 0 auto; }
-    .page { display: none; }
-    .page.active { display: block; }
+    main { max-width: 640px; margin: 0 auto; overflow-x: hidden; }
+    /* horizontal sliding track holding the two tab pages */
+    .tab-track {
+      display: flex;
+      transition: transform .3s cubic-bezier(.32,.72,.3,1);
+      will-change: transform;
+    }
+    .tab-track.no-anim { transition: none; }
+    .page {
+      flex: 0 0 100%;
+      min-width: 0;
+      align-self: flex-start;
+      padding: 14px;
+    }
 
     /* ══════════════════════════════════════
        RECORD PAGE — fridge card grid
@@ -744,6 +755,9 @@
     .sum-table td { padding: 11px 16px; border-bottom: 1px solid var(--border); }
     .sum-table tr:last-child td { border-bottom: none; }
     .sum-table .num-cell { text-align: right; font-weight: 700; color: var(--primary); }
+    .sum-table .sum-cat-row td { background: #f8fafc; font-weight: 700; color: var(--text); }
+    .sum-table .sum-cat-row .num-cell { color: var(--text); }
+    .sum-table td.sum-sub { padding-left: 28px; color: var(--muted); font-weight: 500; }
 
     /* ══════════════════════════════════════
        SETTINGS DRAWER (slides from right)
@@ -863,6 +877,21 @@
     }
     .cp-popup.open { display: block; }
     .cp-title { font-size: 14px; font-weight: 700; text-align: center; margin-bottom: 12px; }
+    .cp-name {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    .cp-name:focus { outline: 2px solid var(--primary); border-color: transparent; }
+    .cp-cap-row {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px; margin-bottom: 12px;
+      font-size: 13px; color: var(--muted); font-weight: 600;
+    }
     .cp-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
     .cp-swatch {
       aspect-ratio: 1; border-radius: 50%;
@@ -1013,26 +1042,28 @@
 </nav>
 
 <main>
-  <!-- ── 기록 페이지 ── -->
-  <div id="page-record" class="page active">
-    <div class="fridge-grid" id="fridgeGrid">
-      <!-- cards injected by JS -->
+  <div class="tab-track" id="tabTrack">
+    <!-- ── 기록 페이지 ── -->
+    <div id="page-record" class="page">
+      <div class="fridge-grid" id="fridgeGrid">
+        <!-- cards injected by JS -->
+      </div>
     </div>
-  </div>
 
-  <!-- ── 합계 페이지 ── -->
-  <div id="page-summary" class="page">
-    <div class="total-banner">
-      <div class="label">오늘 총 판매</div>
-      <div><span class="num" id="grandTotal">0</span> <span class="unit">개</span></div>
-    </div>
-    <div class="sum-card">
-      <div class="sum-card-title">음료별 합계</div>
-      <table class="sum-table"><tbody id="sumByDrink"></tbody></table>
-    </div>
-    <div class="sum-card">
-      <div class="sum-card-title">냉장고별 합계</div>
-      <table class="sum-table"><tbody id="sumByFridge"></tbody></table>
+    <!-- ── 합계 페이지 ── -->
+    <div id="page-summary" class="page">
+      <div class="total-banner">
+        <div class="label">오늘 총 판매</div>
+        <div><span class="num" id="grandTotal">0</span> <span class="unit">개</span></div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-card-title">음료별 합계</div>
+        <table class="sum-table"><tbody id="sumByDrink"></tbody></table>
+      </div>
+      <div class="sum-card">
+        <div class="sum-card-title">냉장고별 합계</div>
+        <table class="sum-table"><tbody id="sumByFridge"></tbody></table>
+      </div>
     </div>
   </div>
 </main>
@@ -1196,13 +1227,20 @@ function showToast(msg) {
 // ════════════════════════════════════════
 // PAGE NAV
 // ════════════════════════════════════════
+let tabIndex = 0;   // 0 = record, 1 = summary
+
+function setTab(i, animate = true) {
+  tabIndex = Math.max(0, Math.min(1, i));
+  const track = document.getElementById('tabTrack');
+  track.classList.toggle('no-anim', !animate);
+  track.style.transform = `translateX(-${tabIndex * 100}%)`;
+  if (!animate) { void track.offsetWidth; track.classList.remove('no-anim'); }
+  document.querySelectorAll('nav button').forEach((b, j) => b.classList.toggle('active', j === tabIndex));
+  if (tabIndex === 1) renderSummary();
+}
+
 function showPage(name) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('nav button').forEach((b,i) => {
-    b.classList.toggle('active', ['record','summary'][i] === name);
-  });
-  document.getElementById('page-' + name).classList.add('active');
-  if (name === 'summary') renderSummary();
+  setTab(name === 'summary' ? 1 : 0);
 }
 
 // ════════════════════════════════════════
@@ -2172,10 +2210,20 @@ function renderSummary() {
   document.getElementById('grandTotal').textContent = grand;
 
   // only drinks that actually need filling (>0)
-  const drinkRows = state.drinks.filter(d => drinkTotals[d.id] > 0);
+  // group 음료별 합계 by category (소주 / 맥주 / 음료 / 기타)
   const t1 = document.getElementById('sumByDrink');
-  t1.innerHTML = drinkRows.length
-    ? drinkRows.map(d => `<tr><td>${escHtml(d.name)}</td><td class="num-cell">${drinkTotals[d.id]}</td></tr>`).join('')
+  let rowsHtml = '';
+  let anyDrink = false;
+  DRINK_CATS.forEach(cat => {
+    const items = state.drinks.filter(d => (d.category || 'etc') === cat.key && drinkTotals[d.id] > 0);
+    if (!items.length) return;
+    anyDrink = true;
+    const catTotal = items.reduce((s, d) => s + drinkTotals[d.id], 0);
+    rowsHtml += `<tr class="sum-cat-row"><td>${cat.label}</td><td class="num-cell">${catTotal}</td></tr>`;
+    rowsHtml += items.map(d => `<tr><td class="sum-sub">${escHtml(d.name)}</td><td class="num-cell">${drinkTotals[d.id]}</td></tr>`).join('');
+  });
+  t1.innerHTML = anyDrink
+    ? rowsHtml
     : `<tr><td colspan="2" style="text-align:center;color:var(--muted);padding:16px">채울 주류 없음</td></tr>`;
 
   const t2 = document.getElementById('sumByFridge');
@@ -2338,21 +2386,47 @@ function openColorPicker(did) {
   const d = state.drinks.find(x => x.id === did);
   if (!d) return;
   cpDrinkId = did;
+  const isEtc = (d.category || 'etc') === 'etc';
+  let selColor = d.color || drinkColor(d.id);
+  let selCap = d.capacity || 6;
+
   const popup = document.getElementById('cpPopup');
   const swatches = SLOT_COLORS.map(col =>
-    `<button class="cp-swatch ${d.color === col ? 'sel' : ''}" style="background:${col}" data-col="${col}"></button>`
+    `<button class="cp-swatch ${selColor === col ? 'sel' : ''}" style="background:${col}" data-col="${col}"></button>`
   ).join('');
-  popup.innerHTML = `<div class="cp-title">${escHtml(d.name)} 색상 선택</div><div class="cp-grid">${swatches}</div>`;
+  popup.innerHTML = `
+    <div class="cp-title">주류 편집</div>
+    <input id="cpName" class="cp-name" type="text" maxlength="30" value="${escHtml(d.name)}" />
+    ${isEtc ? `<div class="cp-cap-row"><span>한 줄당 개수</span><button id="cpCap" class="cap-toggle">${selCap}</button></div>` : ''}
+    <div class="cp-grid">${swatches}</div>
+    <button class="btn btn-primary" id="cpSave" style="width:100%;margin-top:14px">저장</button>`;
+
+  // color selection (visual only until 저장)
   popup.querySelectorAll('.cp-swatch').forEach(sw => {
     sw.addEventListener('click', () => {
-      d.color = sw.dataset.col;
-      save();
-      closeColorPicker();
-      renderSettingsDrawer();
-      renderGrid();
-      refreshOpenDetail();
+      selColor = sw.dataset.col;
+      popup.querySelectorAll('.cp-swatch').forEach(s => s.classList.toggle('sel', s.dataset.col === selColor));
     });
   });
+  // 기타 capacity toggle
+  const capBtn = popup.querySelector('#cpCap');
+  if (capBtn) capBtn.addEventListener('click', () => {
+    selCap = selCap === 6 ? 5 : 6;
+    capBtn.textContent = selCap;
+  });
+  // save name + color + capacity
+  popup.querySelector('#cpSave').addEventListener('click', () => {
+    const nm = popup.querySelector('#cpName').value.trim();
+    if (nm) d.name = nm;
+    d.color = selColor;
+    if (isEtc) d.capacity = selCap;
+    save();
+    closeColorPicker();
+    renderSettingsDrawer();
+    renderGrid();
+    refreshOpenDetail();
+  });
+
   document.getElementById('cpOverlay').classList.add('open');
   popup.classList.add('open');
 }
@@ -2457,28 +2531,47 @@ document.getElementById('newFridgeName').addEventListener('keydown', e => { if (
 // ════════════════════════════════════════
 renderGrid();
 
-// ── Swipe left/right on the main area to switch between 기록 / 합계 tabs ──
+// ── Swipe between 기록 / 합계 tabs with the track following the finger ──
 (function setupTabSwipe() {
   const main = document.querySelector('main');
-  if (!main) return;
-  const TH = 60;                 // min horizontal distance to count as a swipe
-  let x0 = null, y0 = null, active = false;
-  const curTab = () => document.getElementById('page-summary').classList.contains('active') ? 'summary' : 'record';
+  const track = document.getElementById('tabTrack');
+  if (!main || !track) return;
+
+  let x0 = 0, y0 = 0, w = 0, started = false, decided = false, horizontal = false;
 
   main.addEventListener('touchstart', e => {
-    if (e.touches.length !== 1) { active = false; return; }
-    x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; active = true;
+    if (e.touches.length !== 1 || dragState) { started = false; return; }  // ignore during card reorder
+    x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+    w = main.clientWidth || 1;
+    started = true; decided = false; horizontal = false;
   }, { passive: true });
 
+  main.addEventListener('touchmove', e => {
+    if (!started || dragState) return;
+    const dx = e.touches[0].clientX - x0, dy = e.touches[0].clientY - y0;
+    if (!decided) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      decided = true;
+      horizontal = Math.abs(dx) > Math.abs(dy);
+      if (horizontal) track.classList.add('no-anim');
+    }
+    if (!horizontal) return;
+    e.preventDefault();                          // block vertical scroll while swiping
+    let pct = -tabIndex * 100 + (dx / w) * 100;
+    pct = Math.max(-100, Math.min(0, pct));      // clamp within the two pages
+    track.style.transform = `translateX(${pct}%)`;
+  }, { passive: false });
+
   main.addEventListener('touchend', e => {
-    if (!active || x0 === null) return;
-    active = false;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - x0, dy = t.clientY - y0;
-    if (Math.abs(dx) < TH || Math.abs(dx) < Math.abs(dy) * 1.5) return;  // not a clear horizontal swipe
-    const tab = curTab();
-    if (dx < 0 && tab === 'record') showPage('summary');       // swipe left → next tab
-    else if (dx > 0 && tab === 'summary') showPage('record');  // swipe right → previous tab
+    if (!started) return;
+    started = false;
+    track.classList.remove('no-anim');
+    if (!horizontal) return;
+    const dx = e.changedTouches[0].clientX - x0;
+    const TH = w * 0.18;
+    if (dx <= -TH && tabIndex === 0) setTab(1);
+    else if (dx >= TH && tabIndex === 1) setTab(0);
+    else setTab(tabIndex);                       // not far enough → snap back
   });
 })();
 
